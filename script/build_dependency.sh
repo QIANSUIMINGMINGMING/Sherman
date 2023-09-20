@@ -11,6 +11,7 @@ cd ..
 
 # Install memcached
 sudo apt-get install libmemcached-dev
+sudo apt-get install memcached
 
 # Install ibverbs
 sudo apt-get install libibverbs-dev
