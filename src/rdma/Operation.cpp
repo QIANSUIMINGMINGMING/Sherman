@@ -43,7 +43,7 @@ int pollOnce(ibv_cq *cq, int pollNumber, struct ibv_wc *wc) {
 }
 
 static inline void fillSgeWr(ibv_sge &sg, ibv_send_wr &wr, uint64_t source,
-                             uint64_t size, uint32_t lkey) {
+                             uint32_t size, uint32_t lkey) {
   memset(&sg, 0, sizeof(sg));
   sg.addr = (uintptr_t)source;
   sg.length = size;
@@ -56,20 +56,7 @@ static inline void fillSgeWr(ibv_sge &sg, ibv_send_wr &wr, uint64_t source,
 }
 
 static inline void fillSgeWr(ibv_sge &sg, ibv_recv_wr &wr, uint64_t source,
-                             uint64_t size, uint32_t lkey) {
-  memset(&sg, 0, sizeof(sg));
-  sg.addr = (uintptr_t)source;
-  sg.length = size;
-  sg.lkey = lkey;
-
-  memset(&wr, 0, sizeof(wr));
-  wr.wr_id = 0;
-  wr.sg_list = &sg;
-  wr.num_sge = 1;
-}
-
-static inline void fillSgeWr(ibv_sge &sg, ibv_exp_send_wr &wr, uint64_t source,
-                             uint64_t size, uint32_t lkey) {
+                             uint32_t size, uint32_t lkey) {
   memset(&sg, 0, sizeof(sg));
   sg.addr = (uintptr_t)source;
   sg.length = size;
@@ -164,8 +151,6 @@ bool rdmaReceive(ibv_srq *srq, uint64_t source, uint64_t size, uint32_t lkey) {
   return true;
 }
 
-
-
 // for RC & UC
 bool rdmaRead(ibv_qp *qp, uint64_t source, uint64_t dest, uint64_t size,
               uint32_t lkey, uint32_t remoteRKey, bool signal, uint64_t wrID) {
@@ -250,37 +235,121 @@ bool rdmaFetchAndAdd(ibv_qp *qp, uint64_t source, uint64_t dest, uint64_t add,
   return true;
 }
 
+//TODO: implement this function
+// static inline void fillSgeWr(ibv_sge &sg, ibv_exp_send_wr &wr, uint64_t source,
+//                              uint64_t size, uint32_t lkey) {
+//   memset(&sg, 0, sizeof(sg));
+//   sg.addr = (uintptr_t)source;
+//   sg.length = size;
+//   sg.lkey = lkey;
+
+//   memset(&wr, 0, sizeof(wr));
+//   wr.wr_id = 0;
+//   wr.sg_list = &sg;
+//   wr.num_sge = 1;
+// }
+
 bool rdmaFetchAndAddBoundary(ibv_qp *qp, uint64_t source, uint64_t dest,
                              uint64_t add, uint32_t lkey, uint32_t remoteRKey,
                              uint64_t boundary, bool singal, uint64_t wr_id) {
   struct ibv_sge sg;
-  struct ibv_exp_send_wr wr;
-  struct ibv_exp_send_wr *wrBad;
+  struct ibv_send_wr wr;
+  struct ibv_send_wr *wrBad;
 
   fillSgeWr(sg, wr, source, 8, lkey);
 
-  wr.exp_opcode = IBV_EXP_WR_EXT_MASKED_ATOMIC_FETCH_AND_ADD;
-  wr.exp_send_flags = IBV_EXP_SEND_EXT_ATOMIC_INLINE;
   wr.wr_id = wr_id;
 
-  if (singal) {
-    wr.exp_send_flags |= IBV_EXP_SEND_SIGNALED;
-  }
+//   enum ibv_wr_opcode {
+// 	IBV_WR_RDMA_WRITE,
+// 	IBV_WR_RDMA_WRITE_WITH_IMM,
+// 	IBV_WR_SEND,
+// 	IBV_WR_SEND_WITH_IMM,
+// 	IBV_WR_RDMA_READ,
+// 	IBV_WR_ATOMIC_CMP_AND_SWP,
+// 	IBV_WR_ATOMIC_FETCH_AND_ADD,
+// 	IBV_WR_LOCAL_INV,
+// 	IBV_WR_BIND_MW,
+// 	IBV_WR_SEND_WITH_INV,
+// 	IBV_WR_TSO,
+// 	IBV_WR_DRIVER1,
+// };
 
-  wr.ext_op.masked_atomics.log_arg_sz = 3;
-  wr.ext_op.masked_atomics.remote_addr = dest;
-  wr.ext_op.masked_atomics.rkey = remoteRKey;
+// enum ibv_send_flags {
+// 	IBV_SEND_FENCE		= 1 << 0,
+// 	IBV_SEND_SIGNALED	= 1 << 1,
+// 	IBV_SEND_SOLICITED	= 1 << 2,
+// 	IBV_SEND_INLINE		= 1 << 3,
+// 	IBV_SEND_IP_CSUM	= 1 << 4
+// };
 
-  auto &op = wr.ext_op.masked_atomics.wr_data.inline_data.op.fetch_add;
-  op.add_val = add;
-  op.field_boundary = 1ull << boundary;
+// enum ibv_exp_wr_opcode {
+// 	IBV_EXP_WR_RDMA_WRITE		= IBV_WR_RDMA_WRITE,
+// 	IBV_EXP_WR_RDMA_WRITE_WITH_IMM	= IBV_WR_RDMA_WRITE_WITH_IMM,
+// 	IBV_EXP_WR_SEND			= IBV_WR_SEND,
+// 	IBV_EXP_WR_SEND_WITH_IMM	= IBV_WR_SEND_WITH_IMM,
+// 	IBV_EXP_WR_RDMA_READ		= IBV_WR_RDMA_READ,
+// 	IBV_EXP_WR_ATOMIC_CMP_AND_SWP	= IBV_WR_ATOMIC_CMP_AND_SWP,
+// 	IBV_EXP_WR_ATOMIC_FETCH_AND_ADD	= IBV_WR_ATOMIC_FETCH_AND_ADD,
+// 	IBV_EXP_WR_LOCAL_INV		= IBV_WR_LOCAL_INV,
+// 	IBV_EXP_WR_BIND_MW		= IBV_WR_BIND_MW,
+// 	IBV_EXP_WR_SEND_WITH_INV	= IBV_WR_SEND_WITH_INV,
 
-  if (ibv_exp_post_send(qp, &wr, &wrBad)) {
-    Debug::notifyError("Send with MASK FETCH_AND_ADD failed.");
-    return false;
-  }
-  return true;
+// 	IBV_EXP_WR_TSO			= 15 + IBV_EXP_START_ENUM,
+// 	IBV_EXP_WR_SEND_ENABLE		= 0x20 + IBV_EXP_START_ENUM,
+// 	IBV_EXP_WR_RECV_ENABLE,
+// 	IBV_EXP_WR_CQE_WAIT,
+// 	IBV_EXP_WR_EXT_MASKED_ATOMIC_CMP_AND_SWP,
+// 	IBV_EXP_WR_EXT_MASKED_ATOMIC_FETCH_AND_ADD,
+// 	IBV_EXP_WR_NOP,
+// 	IBV_EXP_WR_UMR_FILL,
+// 	IBV_EXP_WR_UMR_INVALIDATE,
+// };
+
+// enum ibv_exp_send_flags {
+// 	IBV_EXP_SEND_FENCE		= IBV_SEND_FENCE,
+// 	IBV_EXP_SEND_SIGNALED		= IBV_SEND_SIGNALED,
+// 	IBV_EXP_SEND_SOLICITED		= IBV_SEND_SOLICITED,
+// 	IBV_EXP_SEND_INLINE		= IBV_SEND_INLINE,
+
+// 	IBV_EXP_SEND_IP_CSUM		= (IBV_EXP_START_FLAG << 0),
+// 	IBV_EXP_SEND_WITH_CALC		= (IBV_EXP_START_FLAG << 1),
+// 	IBV_EXP_SEND_WAIT_EN_LAST	= (IBV_EXP_START_FLAG << 2),
+// 	IBV_EXP_SEND_EXT_ATOMIC_INLINE	= (IBV_EXP_START_FLAG << 3),
+// };
+
 }
+// bool rdmaFetchAndAddBoundary(ibv_qp *qp, uint64_t source, uint64_t dest,
+//                              uint64_t add, uint32_t lkey, uint32_t remoteRKey,
+//                              uint64_t boundary, bool singal, uint64_t wr_id) {
+//   struct ibv_sge sg;
+//   struct ibv_exp_send_wr wr;
+//   struct ibv_exp_send_wr *wrBad;
+
+//   fillSgeWr(sg, wr, source, 8, lkey);
+
+//   wr.exp_opcode = IBV_EXP_WR_EXT_MASKED_ATOMIC_FETCH_AND_ADD;
+//   wr.exp_send_flags = IBV_EXP_SEND_EXT_ATOMIC_INLINE;
+//   wr.wr_id = wr_id;
+
+//   if (singal) {
+//     wr.exp_send_flags |= IBV_EXP_SEND_SIGNALED;
+//   }
+
+//   wr.ext_op.masked_atomics.log_arg_sz = 3;
+//   wr.ext_op.masked_atomics.remote_addr = dest;
+//   wr.ext_op.masked_atomics.rkey = remoteRKey;
+
+//   auto &op = wr.ext_op.masked_atomics.wr_data.inline_data.op.fetch_add;
+//   op.add_val = add;
+//   op.field_boundary = 1ull << boundary;
+
+//   if (ibv_exp_post_send(qp, &wr, &wrBad)) {
+//     Debug::notifyError("Send with MASK FETCH_AND_ADD failed.");
+//     return false;
+//   }
+//   return true;
+// }
 
 
 // for RC & UC
@@ -313,37 +382,38 @@ bool rdmaCompareAndSwap(ibv_qp *qp, uint64_t source, uint64_t dest,
   return true;
 }
 
+//TODO: implement this function
 bool rdmaCompareAndSwapMask(ibv_qp *qp, uint64_t source, uint64_t dest,
                             uint64_t compare, uint64_t swap, uint32_t lkey,
                             uint32_t remoteRKey, uint64_t mask, bool singal) {
-  struct ibv_sge sg;
-  struct ibv_exp_send_wr wr;
-  struct ibv_exp_send_wr *wrBad;
+  // struct ibv_sge sg;
+  // struct ibv_exp_send_wr wr;
+  // struct ibv_exp_send_wr *wrBad;
 
-  fillSgeWr(sg, wr, source, 8, lkey);
+  // fillSgeWr(sg, wr, source, 8, lkey);
 
-  wr.exp_opcode = IBV_EXP_WR_EXT_MASKED_ATOMIC_CMP_AND_SWP;
-  wr.exp_send_flags = IBV_EXP_SEND_EXT_ATOMIC_INLINE;
+  // wr.exp_opcode = IBV_EXP_WR_EXT_MASKED_ATOMIC_CMP_AND_SWP;
+  // wr.exp_send_flags = IBV_EXP_SEND_EXT_ATOMIC_INLINE;
 
-  if (singal) {
-    wr.exp_send_flags |= IBV_EXP_SEND_SIGNALED;
-  }
+  // if (singal) {
+  //   wr.exp_send_flags |= IBV_EXP_SEND_SIGNALED;
+  // }
 
-  wr.ext_op.masked_atomics.log_arg_sz = 3;
-  wr.ext_op.masked_atomics.remote_addr = dest;
-  wr.ext_op.masked_atomics.rkey = remoteRKey;
+  // wr.ext_op.masked_atomics.log_arg_sz = 3;
+  // wr.ext_op.masked_atomics.remote_addr = dest;
+  // wr.ext_op.masked_atomics.rkey = remoteRKey;
 
-  auto &op = wr.ext_op.masked_atomics.wr_data.inline_data.op.cmp_swap;
-  op.compare_val = compare;
-  op.swap_val = swap;
+  // auto &op = wr.ext_op.masked_atomics.wr_data.inline_data.op.cmp_swap;
+  // op.compare_val = compare;
+  // op.swap_val = swap;
 
-  op.compare_mask = mask;
-  op.swap_mask = mask;
+  // op.compare_mask = mask;
+  // op.swap_mask = mask;
 
-  if (ibv_exp_post_send(qp, &wr, &wrBad)) {
-    Debug::notifyError("Send with MASK ATOMIC_CMP_AND_SWP failed.");
-    return false;
-  }
+  // if (ibv_exp_post_send(qp, &wr, &wrBad)) {
+  //   Debug::notifyError("Send with MASK ATOMIC_CMP_AND_SWP failed.");
+  //   return false;
+  // }
   return true;
 }
 

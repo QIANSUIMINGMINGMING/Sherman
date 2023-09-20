@@ -24,6 +24,7 @@ DirectoryConnection::DirectoryConnection(uint16_t dirID, void *dsmPool,
   if (dirID == 0) {
     this->lockPool = (void *)define::kLockStartAddr;
     this->lockSize = define::kLockChipMemSize;
+    //TODO: adapt to new API
     this->lockMR = createMemoryRegionOnChip((uint64_t)this->lockPool,
                                             this->lockSize, &ctx);
     this->lockLKey = lockMR->lkey;
@@ -33,6 +34,7 @@ DirectoryConnection::DirectoryConnection(uint16_t dirID, void *dsmPool,
   for (int i = 0; i < MAX_APP_THREAD; ++i) {
     data2app[i] = new ibv_qp *[machineNR];
     for (size_t k = 0; k < machineNR; ++k) {
+      //TODO: adapt to new API
       createQueuePair(&data2app[i][k], IBV_QPT_RC, cq, &ctx);
     }
   }

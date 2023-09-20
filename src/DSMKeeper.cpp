@@ -89,6 +89,7 @@ void DSMKeeper::setDataFromRemote(uint16_t remoteID, ExchangeMeta *remoteMeta) {
       auto &qp = c->data[k][remoteID];
 
       assert(qp->qp_type == IBV_QPT_RC);
+
       modifyQPtoInit(qp, &c->ctx);
       modifyQPtoRTR(qp, remoteMeta->dirRcQpn2app[k][i],
                     remoteMeta->dirTh[k].lid, remoteMeta->dirTh[k].gid,

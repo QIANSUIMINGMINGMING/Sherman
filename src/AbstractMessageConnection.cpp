@@ -9,7 +9,7 @@ AbstractMessageConnection::AbstractMessageConnection(
   assert(messageNR % kBatchCount == 0);
 
   send_cq = ibv_create_cq(ctx.ctx, 128, NULL, NULL, 0);
-
+  //TODO: adapt to new API 
   createQueuePair(&message, type, send_cq, cq, &ctx);
   modifyUDtoRTS(message, &ctx);
 
