@@ -16,6 +16,9 @@
 
 #include "WRLock.h"
 
+#define NUMA_1_CPU_s1 24
+#define NUMA_1_CPU_s2 72
+
 // CONFIG_ENABLE_EMBEDDING_LOCK and CONFIG_ENABLE_CRC
 // **cannot** be ON at the same time
 

@@ -243,7 +243,13 @@ int main(int argc, char *argv[]) {
   dsm->resetThread();
 
   for (int i = 0; i < kThreadCount; i++) {
-    th[i] = std::thread(thread_run, i);
+    int core_id;
+    if (i < 24) {
+      core_id = i + 24;
+    } else {
+      core_id = i - 24 + 72;
+    }
+    th[i] = std::thread(thread_run, core_id);
   }
 
   while (!ready.load())
