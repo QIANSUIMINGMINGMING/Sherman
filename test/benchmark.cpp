@@ -84,7 +84,13 @@ std::atomic<int64_t> warmup_cnt{0};
 std::atomic_bool ready{false};
 void thread_run(int id) {
 
-  bindCore(id);
+  int core_id;
+  if (id < 24) {
+    core_id = id + 24;
+  } else {
+    core_id = id - 24 + 72;
+  }
+  bindCore(core_id);
 
   dsm->registerThread();
 
@@ -243,13 +249,8 @@ int main(int argc, char *argv[]) {
   dsm->resetThread();
 
   for (int i = 0; i < kThreadCount; i++) {
-    int core_id;
-    if (i < 24) {
-      core_id = i + 24;
-    } else {
-      core_id = i - 24 + 72;
-    }
-    th[i] = std::thread(thread_run, core_id);
+
+    th[i] = std::thread(thread_run, i);
   }
 
   while (!ready.load())
