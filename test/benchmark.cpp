@@ -12,8 +12,8 @@
 
 //////////////////// workload parameters /////////////////////
 
-// #define USE_CORO
-const int kCoroCnt = 3;
+#define USE_CORO
+const int kCoroCnt = 8;
 
 int kReadRatio;
 int kThreadCount;
@@ -61,7 +61,7 @@ public:
     r.v = 23;
     r.is_search = rand_r(&seed) % 100 < kReadRatio;
 
-    tp[id][0]++;
+    tp[id][coro_id]++;
 
     return r;
   }
@@ -264,7 +264,9 @@ int main(int argc, char *argv[]) {
 
     uint64_t all_tp = 0;
     for (int i = 0; i < kThreadCount; ++i) {
-      all_tp += tp[i][0];
+      for (int j = 0; j < kCoroCnt; ++j) {
+        all_tp += tp[i][j];
+      }
     }
     uint64_t cap = all_tp - pre_tp;
     pre_tp = all_tp;
