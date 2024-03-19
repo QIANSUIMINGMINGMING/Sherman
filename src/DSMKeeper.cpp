@@ -196,7 +196,7 @@ void DSMKeeper::barrier(const std::string &barrierKey, BarrierType bt) {
   }
   while (true) {
     uint64_t v = std::stoull(memGet(key.c_str(), key.size()));
-    if (v == this->getServerNR()) {
+    if (v == NR) {
       return;
     }
   }
