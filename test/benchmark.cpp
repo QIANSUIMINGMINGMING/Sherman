@@ -298,7 +298,7 @@ int main(int argc, char *argv[]) {
 
     clock_gettime(CLOCK_REALTIME, &s);
 
-    if (++count % 3 == 0 && dsm->getMyNodeID() == 0) {
+    if (++count % 3 == 0 && dsm->getMyNodeID() == dsm->getMemorySize()) {
       cal_latency();
     }
 
@@ -307,7 +307,7 @@ int main(int argc, char *argv[]) {
 
     printf("%d, throughput %.4f\n", dsm->getMyNodeID(), per_node_tp);
 
-    if (dsm->getMyNodeID() == 0) {
+    if (dsm->getMyNodeID() == dsm->getMemorySize()) {
       printf("cluster throughput %.3f\n", cluster_tp / 1000.0);
       printf("cache hit rate: %lf\n", hit * 1.0 / all);
     }

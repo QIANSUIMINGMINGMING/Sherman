@@ -209,7 +209,7 @@ uint64_t DSMKeeper::sum(const std::string &sum_key, uint64_t value) {
   memSet(key.c_str(), key.size(), (char *)&value, sizeof(value));
 
   uint64_t ret = 0;
-  for (int i = 0; i < this->getServerNR(); ++i) {
+  for (int i = this->getCompNR(); i < this->getServerNR(); ++i) {
     key = key_prefix + std::to_string(i);
     ret += *(uint64_t *)memGet(key.c_str(), key.size());
   }
