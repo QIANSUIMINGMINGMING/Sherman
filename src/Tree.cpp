@@ -59,6 +59,11 @@ Tree::Tree(DSM *dsm, uint16_t tree_id) : dsm(dsm), tree_id(tree_id) {
   } else {
     // std::cout << "fail\n";
   }
+
+#ifdef LOCK_FREE
+  mcm = std::make_unique<rdmacm::multicast::multicastCM>();
+  
+#endif
 }
 
 void Tree::print_verbose() {

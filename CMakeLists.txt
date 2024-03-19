@@ -6,10 +6,12 @@ add_definitions(-DBOOST_COROUTINES_NO_DEPRECATION_WARNING)
 
 #Compiler options
 set(CMAKE_C_FLAGS "-Wall -Wno-deprecated-declarations -Wsign-compare -O3 -g")
-set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++11")
+set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++17")
 
 # Link Options
-set(LINKS_FLAGS "-lcityhash -lboost_system -lboost_coroutine -lpthread -libverbs -lmemcached")
+set(LINKS_FLAGS "-lcityhash -lboost_system -lboost_coroutine -lpthread -libverbs -lrdmacm -lmemcached")
+
+find_package(gflags REQUIRED)
 
 set(INCLUDE_BASE ${PROJECT_SOURCE_DIR}/include)
 include_directories(${INCLUDE_BASE})
@@ -26,6 +28,9 @@ file(GLOB TEST_SRC ${PROJECT_SOURCE_DIR}/test/*.cpp)
 foreach (TEST ${TEST_SRC})
     get_filename_component(TEST_NAME ${TEST} NAME_WE)
     add_executable(${TEST_NAME} ${TEST})
-    target_link_libraries(${TEST_NAME} ${LINKS_FLAGS})
+    target_link_libraries(${TEST_NAME} 
+        ${LINKS_FLAGS}
+        gflags
+    )
 endforeach()
 

@@ -1,7 +1,11 @@
 #if !defined(_TREE_H_)
 #define _TREE_H_
 
+#define LOCK_FREE
+
 #include "DSM.h"
+#include "mc.h"
+
 #include <atomic>
 #include <city.h>
 #include <functional>
@@ -64,6 +68,8 @@ public:
 
 private:
   DSM *dsm;
+  std::unique_ptr<rdmacm::multicast::multicastCM> mcm;
+
   uint64_t tree_id;
   GlobalAddress root_ptr_ptr; // the address which stores root pointer;
 

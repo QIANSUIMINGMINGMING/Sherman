@@ -27,7 +27,7 @@ Directory::~Directory() { delete chunckAlloc; }
 
 void Directory::dirThread() {
 
-  bindCore(95 - dirID);
+  bindCore(94 - dirID);
   Debug::notifyInfo("thread %d in memory nodes runs...\n", dirID);
 
   while (true) {
@@ -37,7 +37,6 @@ void Directory::dirThread() {
     switch (int(wc.opcode)) {
     case IBV_WC_RECV: // control message
     {
-
       auto *m = (RawMessage *)dCon->message->getMessage();
 
       process_message(m);
