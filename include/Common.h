@@ -32,7 +32,7 @@
 
 #define MAX_COMP 6
 #define MAX_MEMORY 2
-#define MAXMACHINE 8
+#define MAX_MACHINE 8
 
 #define ADD_ROUND(x, n) ((x) = ((x) + 1) % (n))
 
