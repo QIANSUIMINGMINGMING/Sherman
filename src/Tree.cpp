@@ -119,6 +119,7 @@ void Tree::broadcast_new_root(GlobalAddress new_root_addr, int root_level) {
   m.type = RpcType::NEW_ROOT;
   m.addr = new_root_addr;
   m.level = root_level;
+  //TODO: update
   for (int i = 0; i < dsm->getClusterSize(); ++i) {
     dsm->rpc_call_dir(m, i);
   }

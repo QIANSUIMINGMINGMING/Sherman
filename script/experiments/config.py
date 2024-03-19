@@ -23,16 +23,16 @@ server_list = ServerList(
     Server('dbg21', '10.16.22.253', SERVER_PORT),
 )
 
-numa_info = {
+# numa_info = {
 
-}
+# }
 
-file = open('check_nic.log', 'r')
-for i in range(server_list.__len__()):
-    ipline = file.readline()
-    ipline = ipline.strip('\n')
-    numaline = file.readline()
-    numaline = numaline.strip('\n')
-    numa_info[ipline] = numaline
+# file = open('check_nic.log', 'r')
+# for i in range(server_list.__len__()):
+#     ipline = file.readline()
+#     ipline = ipline.strip('\n')
+#     numaline = file.readline()
+#     numaline = numaline.strip('\n')
+#     numa_info[ipline] = numaline
 
-print(numa_info)
+# print(numa_info)

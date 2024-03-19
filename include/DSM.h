@@ -14,6 +14,8 @@
 class DSMKeeper;
 class Directory;
 
+
+
 class DSM {
 
 public:
@@ -27,7 +29,11 @@ public:
 
   uint16_t getMyNodeID() { return myNodeID; }
   uint16_t getMyThreadID() { return thread_id; }
+  // uint16_t getClusterSize() { return conf.machineNR; }
+  uint16_t getComputeSize() { return conf.computeNR; }
+  uint16_t getMemorySize() { return conf.memoryNR; }
   uint16_t getClusterSize() { return conf.machineNR; }
+
   uint64_t getThreadTag() { return thread_tag; }
 
   // RDMA operations
@@ -168,7 +174,7 @@ private:
 public:
   bool is_register() { return thread_id != -1; }
   void barrier(const std::string &ss) { keeper->barrier(ss); }
-
+  void barrier(const std::string &ss, BarrierType bt) { keeper->barrier(ss, bt); }
   char *get_rdma_buffer() { return rdma_buffer; }
   RdmaBuffer &get_rbuf(int coro_id) { return rbuf[coro_id]; }
 
@@ -195,10 +201,12 @@ public:
   }
 };
 
+
+//TODO: modify execute mode
 inline GlobalAddress DSM::alloc(size_t size) {
 
   thread_local int next_target_node =
-      (getMyThreadID() + getMyNodeID()) % conf.machineNR;
+      (getMyThreadID() + getMyNodeID()) % conf.memoryNR;
   thread_local int next_target_dir_id =
       (getMyThreadID() + getMyNodeID()) % NR_DIRECTORY;
 
@@ -212,7 +220,7 @@ inline GlobalAddress DSM::alloc(size_t size) {
     local_allocator.set_chunck(rpc_wait()->addr);
 
     if (++next_target_dir_id == NR_DIRECTORY) {
-      next_target_node = (next_target_node + 1) % conf.machineNR;
+      next_target_node = (next_target_node + 1) % conf.memoryNR;
       next_target_dir_id = 0;
     }
 

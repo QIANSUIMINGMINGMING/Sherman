@@ -36,6 +36,12 @@ struct ExchangeMeta {
 
 } __attribute__((packed));
 
+enum class BarrierType {
+  SERVER,
+  COMPUTE,
+  MEMORY
+};
+
 class DSMKeeper : public Keeper {
 
 private:
@@ -71,8 +77,8 @@ protected:
 
 public:
   DSMKeeper(ThreadConnection **thCon, DirectoryConnection **dirCon, RemoteConnection *remoteCon,
-            uint32_t maxServer = 12)
-      : Keeper(maxServer), thCon(thCon), dirCon(dirCon),
+            uint32_t maxServer = 12, uint32_t maxMem = 6, uint32_t maxComp = 6)
+      : Keeper(maxServer, maxMem, maxComp), thCon(thCon), dirCon(dirCon),
         remoteCon(remoteCon) {
 
     initLocalMeta();
@@ -89,6 +95,7 @@ public:
   }
 
   ~DSMKeeper() { disconnectMemcached(); }
+  void barrier(const std::string &barrierKey, BarrierType bt);
   void barrier(const std::string &barrierKey);
   uint64_t sum(const std::string &sum_key, uint64_t value);
 };

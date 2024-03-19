@@ -17,7 +17,9 @@ const int kCoroCnt = 8;
 
 int kReadRatio;
 int kThreadCount;
-int kNodeCount;
+// int kNodeCount;
+int kCompNodeCount;
+int kMemoNodeCount;
 uint64_t kKeySpace = 64 * define::MB;
 double kWarmRatio = 0.8;
 double zipfan = 0;
@@ -94,8 +96,8 @@ void thread_run(int id) {
 
   dsm->registerThread();
 
-  uint64_t all_thread = kThreadCount * dsm->getClusterSize();
-  uint64_t my_id = kThreadCount * dsm->getMyNodeID() + id;
+  uint64_t all_thread = kThreadCount * dsm->getComputeSize();
+  uint64_t my_id = kThreadCount * (dsm->getMyNodeID() - dsm->getMemorySize()) + id;
 
   printf("I am thread %ld on compute nodes\n", my_id);
 
@@ -116,7 +118,8 @@ void thread_run(int id) {
     while (warmup_cnt.load() != kThreadCount)
       ;
     printf("node %d finish\n", dsm->getMyNodeID());
-    dsm->barrier("warm_finish");
+    // dsm->barrier("warm_finish");
+    dsm->barrier("warm_finish", BarrierType::COMPUTE);
 
     uint64_t ns = bench_timer.end();
     printf("warmup time %lds\n", ns / 1000 / 1000 / 1000);
@@ -171,16 +174,17 @@ void thread_run(int id) {
 }
 
 void parse_args(int argc, char *argv[]) {
-  if (argc != 4) {
+  if (argc != 5) {
     printf("Usage: ./benchmark kNodeCount kReadRatio kThreadCount\n");
     exit(-1);
   }
 
-  kNodeCount = atoi(argv[1]);
-  kReadRatio = atoi(argv[2]);
-  kThreadCount = atoi(argv[3]);
+  kCompNodeCount = atoi(argv[1]);
+  kMemoNodeCount = atoi(argv[2]);
+  kReadRatio = atoi(argv[3]);
+  kThreadCount = atoi(argv[4]);
 
-  printf("kNodeCount %d, kReadRatio %d, kThreadCount %d\n", kNodeCount,
+  printf("kCompNodeCount %d, kMemoNodeCOunt %d, kReadRatio %d, kThreadCount %d\n", kCompNodeCount, kMemoNodeCount,
          kReadRatio, kThreadCount);
 }
 
@@ -233,7 +237,9 @@ int main(int argc, char *argv[]) {
   parse_args(argc, argv);
 
   DSMConfig config;
-  config.machineNR = kNodeCount;
+  // config.machineNR = kNodeCount;
+  config.computeNR = kCompNodeCount;
+  config.memoryNR = kMemoNodeCount;
   dsm = DSM::getInstance(config);
 
   dsm->registerThread();
@@ -247,6 +253,11 @@ int main(int argc, char *argv[]) {
 
   dsm->barrier("benchmark");
   dsm->resetThread();
+
+  if (dsm->getMyNodeID() < kMemoNodeCount) {
+    while (true) 
+      ;
+  }
 
   for (int i = 0; i < kThreadCount; i++) {
 

@@ -161,6 +161,47 @@ void DSMKeeper::barrier(const std::string &barrierKey) {
   }
 }
 
+void DSMKeeper::barrier(const std::string &barrierKey, BarrierType bt) {
+  uint16_t initialNodeId;
+  uint16_t NR;
+  bool toAdd = false;
+
+  if (bt == BarrierType::COMPUTE) {
+    initialNodeId = this->getMemNR();
+    NR = this->getCompNR();
+    if (this->getMyNodeID() >= this->getMemNR() ) {
+      toAdd = true;
+    }
+  } else if (bt == BarrierType::MEMORY){
+    initialNodeId = 0;
+    NR = this->getMemNR();
+    if (this->getMyNodeID() < this->getMemNR()) {
+      toAdd = true;
+    }
+  } else if (bt == BarrierType::SERVER){
+    initialNodeId = 0;
+    NR = this->getServerNR();
+    toAdd = true;
+  } else {
+    printf("bad bt");
+    exit(-1);
+  }
+
+  std::string key = std::string("barrier-") + barrierKey;
+  if (this->getMyNodeID() == initialNodeId) {
+    memSet(key.c_str(), key.size(), "0", 1);
+  }
+  if (toAdd) {
+    memFetchAndAdd(key.c_str(), key.size());
+  }
+  while (true) {
+    uint64_t v = std::stoull(memGet(key.c_str(), key.size()));
+    if (v == this->getServerNR()) {
+      return;
+    }
+  }
+}
+
 uint64_t DSMKeeper::sum(const std::string &sum_key, uint64_t value) {
   std::string key_prefix = std::string("sum-") + sum_key;
 

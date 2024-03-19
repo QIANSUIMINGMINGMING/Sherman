@@ -22,9 +22,18 @@ class Keeper {
 
 private:
   static const char *SERVER_NUM_KEY;
+  static const char *MEMORY_NUM_KEY;
+  static const char *COMP_NUM_KEY;
 
-  uint32_t maxServer;
+  uint32_t maxServer;  
   uint16_t curServer;
+
+  uint32_t maxMem;
+  uint16_t curMem;
+
+  uint32_t maxComp;
+  uint16_t curComp;
+
   uint16_t myNodeID;
   std::string myIP;
   uint16_t myPort;
@@ -40,11 +49,14 @@ protected:
 
 
 public:
-  Keeper(uint32_t maxServer = 12);
+  Keeper(uint32_t maxServer = 12, uint32_t maxMem = 6, uint32_t maxComp = 6 );
   ~Keeper();
 
   uint16_t getMyNodeID() const { return this->myNodeID; }
   uint16_t getServerNR() const { return this->maxServer; }
+  uint16_t getCompNR() const { return this->maxComp; }
+  uint16_t getMemNR() const { return this->maxMem; }
+  
   uint16_t getMyPort() const { return this->myPort; }
 
   std::string getMyIP() const { return this->myIP; }

@@ -103,8 +103,7 @@ void DSM::initRDMAConnection() {
                                 conf.machineNR, remoteInfo);
   }
 
-  keeper = new DSMKeeper(thCon, dirCon, remoteInfo, conf.machineNR);
-
+  keeper = new DSMKeeper(thCon, dirCon, remoteInfo, conf.machineNR, conf.memoryNR, conf.computeNR );
   myNodeID = keeper->getMyNodeID();
 }
 

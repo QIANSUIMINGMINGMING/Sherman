@@ -5,6 +5,9 @@ int main() {
 
   DSMConfig config;
   config.machineNR = 2;
+
+  config.computeNR = 1;
+  config.memoryNR = 1;
   DSM *dsm = DSM::getInstance(config);
 
   dsm->registerThread();
