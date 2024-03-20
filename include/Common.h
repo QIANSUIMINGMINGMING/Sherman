@@ -117,6 +117,8 @@ static inline unsigned long long asm_rdtsc(void) {
 // For Tree
 using Key = uint64_t;
 using Value = uint64_t;
+using TS = uint64_t;
+
 constexpr Key kKeyMin = std::numeric_limits<Key>::min();
 constexpr Key kKeyMax = std::numeric_limits<Key>::max();
 constexpr Value kValueNull = 0;

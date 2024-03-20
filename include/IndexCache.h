@@ -15,6 +15,34 @@ extern bool enter_debug;
 
 using CacheSkipList = InlineSkipList<CacheEntryComparator>;
 
+class KVCache {
+public:
+  // Bytes
+  KVCache(int cache_size);
+
+  bool add_to_cache(const Key k, const TS ts, GlobalAddress ga);
+  const CacheEntry *search_from_cache(const Key &k, GlobalAddress *addr,
+                                      bool is_leader = false);
+
+  void search_range_from_cache(const Key &from, const Key &to,
+                               std::vector<LeafPage *> &result);
+
+  bool add_entry(const Key &from, const Key &to, LeafPage *ptr);
+  const CacheEntry *find_entry(const Key &k);
+  const CacheEntry *find_entry(const Key &from, const Key &to);
+
+  bool invalidate(const CacheEntry *entry);
+
+  const CacheEntry *get_a_random_entry(uint64_t &freq);
+
+  void statistics();
+
+  void bench();  
+
+
+
+};
+
 class IndexCache {
 
 public:

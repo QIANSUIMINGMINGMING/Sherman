@@ -51,12 +51,10 @@ int verify_port(struct multicast_node * node) {
 
 multicastCM::multicastCM(): mcIp(FLAGS_mcIp), mcGroups(FLAGS_mcGroups), isSender(FLAGS_mcIsSender), mbr(FLAGS_dramGB * FLAGS_rdmaMemoryFactor * 1024 * 1024 * 1024) {
     connects_left = mcGroups;
-
     if (alloc_nodes(mcGroups))
         exit(1);
 
     pthread_create(&cmathread, NULL, cma_thread_manager, this);
-
     /*
     * Pause to give SM chance to configure switches.  We don't want to
     * handle reliability issue in this simple test program.
