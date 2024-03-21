@@ -236,10 +236,10 @@ int main(int argc, char *argv[]) {
 
   parse_args(argc, argv);
 
-  DSMConfig config;
+  DSMConfig config(kCompNodeCount,kMemoNodeCount);
   // config.machineNR = kNodeCount;
-  config.computeNR = kCompNodeCount;
-  config.memoryNR = kMemoNodeCount;
+  // config.computeNR = kCompNodeCount;
+  // config.memoryNR = kMemoNodeCount;
   dsm = DSM::getInstance(config);
 
   dsm->registerThread();
