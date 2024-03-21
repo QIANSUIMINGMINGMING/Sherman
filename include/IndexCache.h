@@ -6,42 +6,94 @@
 #include "Timer.h"
 #include "WRLock.h"
 #include "third_party/inlineskiplist.h"
+#include "mc.h"
 
 #include <atomic>
 #include <queue>
 #include <vector>
+#include <oneapi/tbb/concurrent_hash_map.h>
 
 extern bool enter_debug;
 
 using CacheSkipList = InlineSkipList<CacheEntryComparator>;
 
-class KVCache {
-public:
-  // Bytes
-  KVCache(int cache_size);
+// struct KVCacheEntry {
+//   TS ts;
+//   Value v;
 
-  bool add_to_cache(const Key k, const TS ts, GlobalAddress ga);
-  const CacheEntry *search_from_cache(const Key &k, GlobalAddress *addr,
-                                      bool is_leader = false);
+//   KVCacheEntry(TS ts, Value v):ts(ts), v(v) {}
+// };
+// using CacheHashMap = oneapi::tbb::concurrent_hash_map<uint64_t, KVCacheEntry>;
 
-  void search_range_from_cache(const Key &from, const Key &to,
-                               std::vector<LeafPage *> &result);
+// class KVCache {
+// public:
+//   // Bytes
+//   KVCache(int cache_size);
 
-  bool add_entry(const Key &from, const Key &to, LeafPage *ptr);
-  const CacheEntry *find_entry(const Key &k);
-  const CacheEntry *find_entry(const Key &from, const Key &to);
+//   void add_to_cache(uint64_t k, TS ts, Value v) {
+//     CacheHashMap::accessor a;
+//     if (ts_table.find(a, k)) {
+//       if (ts > a->second.ts) {
+//         a->second.ts = ts;
+//       }
+//     } else {
+//       ts_table.insert(std::make_pair(k, KVCacheEntry(ts, v)));
+//       //postsend
+//       cur_size.fetch_add(1);
+//       if (cur_size >= cache_size) {
+//         batch_insert();
+//       }
+//     }
+//   }
 
-  bool invalidate(const CacheEntry *entry);
+//   void search_from_cache(const Key &k, Value & v) {
+//     CacheHashMap::const_accessor a;
+//     if (ts_table.find(a, k)) {
+//       v = a->second.v;
+//     } else {
 
-  const CacheEntry *get_a_random_entry(uint64_t &freq);
+//     }
+//   }
 
-  void statistics();
+//   void batch_insert() {
 
-  void bench();  
+//   }
+  
+      
+  // const CacheEntry *search_from_cache(const Key &k, GlobalAddress *addr,
+//                                       bool is_leader = false);
 
+//   void search_range_from_cache(const Key &from, const Key &to,
+//                                std::vector<LeafPage *> &result);
 
+//   bool add_entry(const Key &from, const Key &to, LeafPage *ptr);
+//   const CacheEntry *find_entry(const Key &k);
+//   const CacheEntry *find_entry(const Key &from, const Key &to);
 
-};
+//   bool invalidate(const CacheEntry *entry);
+
+//   const CacheEntry *get_a_random_entry(uint64_t &freq);
+
+//   void statistics();
+
+//   void bench();  
+
+// private:
+
+//   // struct KVCacheEntry {
+//   //   TS ts;
+//   //   Value v;
+
+//   //   KVCacheEntry(TS ts, Value v):ts(ts), v(v) {}
+//   // };
+  
+//   CacheHashMap ts_table;
+//   int cache_size;
+
+//   std::atomic<int> cur_size = 0;
+//   std::unique_ptr<rdmacm::multicast::multicastCM> mcm;
+
+// };
 
 class IndexCache {
 

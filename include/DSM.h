@@ -36,6 +36,8 @@ public:
 
   uint64_t getThreadTag() { return thread_tag; }
 
+  void post_send();
+
   // RDMA operations
   // buffer is registered memory
   void read(char *buffer, GlobalAddress gaddr, size_t size, bool signal = true,
@@ -201,6 +203,14 @@ public:
   }
 };
 
+inline void DSM::post_send() {
+  thread_local int next_target_node =
+      (getMyThreadID() + getMyNodeID()) % conf.memoryNR;
+  thread_local int next_target_dir_id =
+      (getMyThreadID() + getMyNodeID()) % NR_DIRECTORY;
+
+  this->rpc_call_dir({RpcType::POST_SEND}, next_target_node, next_target_dir_id);
+}
 
 //TODO: modify execute mode
 inline GlobalAddress DSM::alloc(size_t size) {

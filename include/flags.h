@@ -33,3 +33,5 @@ DECLARE_bool(mcIsSender);
 
 DECLARE_int32(internalPageSize);
 DECLARE_int32(leafPageSize);
+
+DECLARE_int32(KVCacheSize);

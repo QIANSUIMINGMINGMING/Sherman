@@ -81,6 +81,10 @@ void Directory::process_message(const RawMessage *m) {
     break;
   }
 
+  case RpcType::POST_SEND: {
+    break;
+  }
+
   default:
     assert(false);
   }

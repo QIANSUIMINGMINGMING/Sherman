@@ -10,8 +10,16 @@
 #include <city.h>
 #include <functional>
 #include <iostream>
+#include <oneapi/tbb/concurrent_hash_map.h>
 
 class IndexCache;
+struct KVCacheEntry {
+  TS ts;
+  Value v;
+
+  KVCacheEntry(TS ts, Value v):ts(ts), v(v) {}
+};
+using CacheHashMap = oneapi::tbb::concurrent_hash_map<uint64_t, KVCacheEntry>;
 
 struct LocalLockNode {
   std::atomic<uint64_t> ticket_lock;
@@ -52,6 +60,9 @@ public:
               int coro_id = 0);
   bool search(const Key &k, Value &v, CoroContext *cxt = nullptr,
               int coro_id = 0);
+
+  void batch_insert(CoroContext *cxt = nullptr, int coro_id = 0);
+
   void del(const Key &k, CoroContext *cxt = nullptr, int coro_id = 0);
 
   uint64_t range_query(const Key &from, const Key &to, Value *buffer,
@@ -68,7 +79,6 @@ public:
 
 private:
   DSM *dsm;
-  std::unique_ptr<rdmacm::multicast::multicastCM> mcm;
 
   uint64_t tree_id;
   GlobalAddress root_ptr_ptr; // the address which stores root pointer;
@@ -80,6 +90,10 @@ private:
   LocalLockNode *local_locks[MAX_MACHINE];
 
   IndexCache *index_cache;
+
+  int cache_size;
+  std::atomic<int> cur_cache_size;
+  CacheHashMap ts_table;
 
   void print_verbose();
 

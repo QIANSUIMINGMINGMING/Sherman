@@ -12,6 +12,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++17")
 set(LINKS_FLAGS "-lcityhash -lboost_system -lboost_coroutine -lpthread -libverbs -lrdmacm -lmemcached")
 
 find_package(gflags REQUIRED)
+find_package(TBB REQUIRED tbb tbbmalloc)
 
 set(INCLUDE_BASE ${PROJECT_SOURCE_DIR}/include)
 include_directories(${INCLUDE_BASE})
@@ -28,9 +29,15 @@ file(GLOB TEST_SRC ${PROJECT_SOURCE_DIR}/test/*.cpp)
 foreach (TEST ${TEST_SRC})
     get_filename_component(TEST_NAME ${TEST} NAME_WE)
     add_executable(${TEST_NAME} ${TEST})
+    target_include_directories(${TEST_NAME}
+        PUBLIC ${INCLUDE_BASE}
+        PUBLIC ${TBB_INCLUDE_DIRS}
+    )   
     target_link_libraries(${TEST_NAME} 
         ${LINKS_FLAGS}
         gflags
+        TBB::tbb
+        TBB::tbbmalloc
     )
 endforeach()
 

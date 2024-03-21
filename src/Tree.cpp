@@ -24,7 +24,7 @@ thread_local GlobalAddress path_stack[define::kMaxCoro]
 thread_local Timer timer;
 thread_local std::queue<uint16_t> hot_wait_queue;
 
-Tree::Tree(DSM *dsm, uint16_t tree_id) : dsm(dsm), tree_id(tree_id) {
+Tree::Tree(DSM *dsm, uint16_t tree_id) : dsm(dsm), tree_id(tree_id), cache_size(FLAGS_KVCacheSize) {
 
   // initiate local lock table
   for (int i = 0; i < dsm->getClusterSize(); ++i) {
@@ -60,10 +60,10 @@ Tree::Tree(DSM *dsm, uint16_t tree_id) : dsm(dsm), tree_id(tree_id) {
     // std::cout << "fail\n";
   }
 
-#ifdef LOCK_FREE
-  mcm = std::make_unique<rdmacm::multicast::multicastCM>();
-  mcm->test_node();
-#endif
+// #ifdef LOCK_FREE
+//   mcm = std::make_unique<rdmacm::multicast::multicastCM>();
+//   mcm->test_node();
+// #endif
 }
 
 void Tree::print_verbose() {
@@ -1078,6 +1078,20 @@ void Tree::run_coroutine(CoroFunc func, int id, int coro_cnt) {
   master();
 }
 
+void search(Key k, Value &v) {
+
+}
+
+void insert(Key k, Value) {
+
+}
+
+void Tree::batch_insert(CoroContext *cxt, int coro_id) {
+  for (auto it=ts_table.begin(); it!=ts_table.end(); ++it) {
+    this->insert(it->first, it->second.v, cxt, coro_id);
+  }
+}
+
 void Tree::coro_worker(CoroYield &yield, RequstGen *gen, int coro_id) {
   CoroContext ctx;
   ctx.coro_id = coro_id;
@@ -1092,11 +1106,34 @@ void Tree::coro_worker(CoroYield &yield, RequstGen *gen, int coro_id) {
     auto r = gen->next();
 
     coro_timer.begin();
+    timespec timestamp;
+      if (clock_gettime(CLOCK_REALTIME, &timestamp))
+          throw 1;
+      TS ts = (uint64_t)(timestamp.tv_sec * 1000000000) + (uint64_t)(timestamp.tv_nsec);
     if (r.is_search) {
-      Value v;
-      this->search(r.k, v, &ctx, coro_id);
+      CacheHashMap::const_accessor a;
+      if (ts_table.find(a, r.k)) {
+        r.v = a->second.v;
+      } else {
+        this->search(r.k, r.v, &ctx, coro_id);
+      }
     } else {
-      this->insert(r.k, r.v, &ctx, coro_id);
+      CacheHashMap::accessor a;
+      if (ts_table.find(a, r.k)) {
+        //get current time
+        if (ts > a->second.ts) {
+          a->second.ts = ts;
+          a->second.v = r.v;
+        }
+      } else {
+        ts_table.insert(std::make_pair(r.k, KVCacheEntry(ts, r.v)));
+        dsm->post_send();
+        cur_cache_size.fetch_add(1);
+        if (cur_cache_size >= cache_size) {
+          batch_insert(&ctx, coro_id);
+        }
+      }
+      // this->insert(r.k, r.v, &ctx, coro_id);
     }
     auto us_10 = coro_timer.end() / 100;
     if (us_10 >= LATENCY_WINDOWS) {

@@ -29,3 +29,5 @@ DEFINE_bool(mcIsSender, false, "cmIsSender");
 
 DEFINE_int32(internalPageSize, 1024, "internal page size");
 DEFINE_int32(leafPageSize, 1024, "leaf page size");
+
+DEFINE_int32(KVCacheSize, 1024*1024*256, "KV Cache Size B");
