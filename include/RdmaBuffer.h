@@ -10,6 +10,8 @@ private:
   static const int kPageBufferCnt = 8;    // async, buffer safty
   static const int kSiblingBufferCnt = 8; // async, buffer safty
   static const int kCasBufferCnt = 8;     // async, buffer safty
+  // static const int kBatchPageBufferCnt = 99;
+  // static const int k
 
   char *buffer;
 

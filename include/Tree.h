@@ -5,6 +5,7 @@
 
 #include "DSM.h"
 #include "mc.h"
+#include "KVCache.h"
 
 #include <atomic>
 #include <city.h>
@@ -12,13 +13,9 @@
 #include <iostream>
 #include <oneapi/tbb/concurrent_hash_map.h>
 
-class IndexCache;
-struct KVCacheEntry {
-  TS ts;
-  Value v;
 
-  KVCacheEntry(TS ts, Value v):ts(ts), v(v) {}
-};
+class IndexCache;
+
 using CacheHashMap = oneapi::tbb::concurrent_hash_map<uint64_t, KVCacheEntry>;
 
 struct LocalLockNode {
@@ -63,6 +60,9 @@ public:
 
   void batch_insert(CoroContext *cxt = nullptr, int coro_id = 0);
 
+  void batch_insert(KVTS *kvs, int cnt, CoroContext *cxt = nullptr,
+                    int coro_id = 0);
+
   void del(const Key &k, CoroContext *cxt = nullptr, int coro_id = 0);
 
   uint64_t range_query(const Key &from, const Key &to, Value *buffer,
@@ -104,6 +104,8 @@ private:
 
   void coro_worker(CoroYield &yield, RequstGen *gen, int coro_id);
   void coro_master(CoroYield &yield, int coro_cnt);
+
+  void do_batch_insert(KVTS *kvs, int from, int to, InternalPage *page, int in_page_idx, CoroContext *cxt, int coro_id);
 
   void broadcast_new_root(GlobalAddress new_root_addr, int root_level);
   bool update_new_root(GlobalAddress left, const Key &k, GlobalAddress right,
@@ -149,6 +151,7 @@ private:
 
 class Header {
 private:
+  // TODO: add entry count
   GlobalAddress leftmost_ptr;
   GlobalAddress sibling_ptr;
   uint8_t level;

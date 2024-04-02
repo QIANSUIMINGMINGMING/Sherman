@@ -44,4 +44,3 @@ char *getMac() {
 
     return (char *)ifr.ifr_hwaddr.sa_data;
 }
-

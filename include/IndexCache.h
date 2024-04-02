@@ -103,6 +103,8 @@ public:
   bool add_to_cache(InternalPage *page);
   const CacheEntry *search_from_cache(const Key &k, GlobalAddress *addr,
                                       bool is_leader = false);
+  const CacheEntry *search_from_cache(const Key &k, int &entry_idx, 
+                                      bool is_leader = false);
 
   void search_range_from_cache(const Key &from, const Key &to,
                                std::vector<InternalPage *> &result);
@@ -251,6 +253,58 @@ inline const CacheEntry *IndexCache::search_from_cache(const Key &k,
       }
       if (!find) {
         *addr = page->records[cnt - 1].ptr;
+      }
+    }
+
+    compiler_barrier();
+    if (entry->ptr) { // check if it is freed.
+      return entry;
+    }
+  }
+
+  return nullptr;
+}
+
+inline const CacheEntry *IndexCache::search_from_cache(const Key &k,
+                                                       int &entry_idx,
+                                                       bool is_leader) {
+  // notice: please ensure the thread 0 can make progress
+  if (is_leader &&
+      !delay_free_list.empty()) { // try to free a page in the delay-free-list
+    auto p = delay_free_list.front();
+    if (asm_rdtsc() - p.second > 3000ull * 10) {
+      free(p.first);
+      free_page_cnt.fetch_add(1);
+
+      free_lock.wLock();
+      delay_free_list.pop();
+      free_lock.wUnlock();
+    }
+  }
+
+  auto entry = find_entry(k);
+
+  InternalPage *page = entry ? entry->ptr : nullptr;
+
+  if (page && entry->from <= k && entry->to >= k) {
+
+    page->index_cache_freq++;
+
+    auto cnt = page->hdr.last_index + 1;
+    if (k < page->records[0].key) {
+      entry_idx = -1;
+    } else {
+
+      bool find = false;
+      for (int i = 1; i < cnt; ++i) {
+        if (k < page->records[i].key) {
+          find = true;
+          entry_idx = i - 1;
+          break;
+        }
+      }
+      if (!find) {
+        entry_idx = cnt - 1;
       }
     }
 

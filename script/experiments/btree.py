@@ -2,7 +2,7 @@ import config
 import os
 from distexprunner import *
 
-NUMBER_NODES = 5
+NUMBER_NODES = 4
 
 parameter_grid = ParameterGrid(
     worker=[4,8,16,32,64],

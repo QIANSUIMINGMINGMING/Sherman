@@ -9,7 +9,7 @@
 #include <atomic>
 #include <bitset>
 #include <limits>
-
+#include <cmath>
 #include "Debug.h"
 #include "HugePageAlloc.h"
 #include "Rdma.h"
@@ -136,5 +136,65 @@ __inline__ unsigned long long rdtsc(void) {
 inline void mfence() { asm volatile("mfence" ::: "memory"); }
 
 inline void compiler_barrier() { asm volatile("" ::: "memory"); }
+
+constexpr bool is_prime(int n) {
+    if (n <= 1)
+        return false;
+    if (n <= 3)
+        return true;
+    if (n % 2 == 0 || n % 3 == 0)
+        return false;
+    for (int i = 5; i * i <= n; i += 6) {
+        if (n % i == 0 || n % (i + 2) == 0)
+            return false;
+    }
+    return true;
+}
+
+constexpr int closest_prime(int num) {
+    if (is_prime(num))
+        return num;
+    
+    int lower_prime = num - 1;
+    while (!is_prime(lower_prime))
+        lower_prime--;
+
+    int upper_prime = num + 1;
+    while (!is_prime(upper_prime))
+        upper_prime++;
+
+    return (num - lower_prime < upper_prime - num) ? lower_prime : upper_prime;
+}
+
+template <typename T>
+class HugePages
+{
+   T* memory;
+   size_t size; // in bytes
+   size_t highWaterMark;  // max index
+  public:
+   HugePages(size_t size) : size(size)
+   {
+      void* p = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB, -1, 0);
+      if (p == MAP_FAILED)
+         throw std::runtime_error("mallocHugePages failed");
+      memory = static_cast<T*>(p);
+      highWaterMark = (size / sizeof(T));
+   }
+
+   size_t get_size(){
+      return highWaterMark;
+   }
+   
+   inline operator T*() { return memory; }
+
+   
+   inline T& operator[](size_t index) const
+   {
+      return memory[index];
+   }
+   ~HugePages() { munmap(memory, size); }
+};
+
 
 #endif /* __COMMON_H__ */

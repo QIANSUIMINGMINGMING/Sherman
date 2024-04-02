@@ -2,6 +2,7 @@
 #include "IndexCache.h"
 #include "RdmaBuffer.h"
 #include "Timer.h"
+#include "SmallHashTable.h"
 
 #include <algorithm>
 #include <city.h>
@@ -23,6 +24,17 @@ thread_local GlobalAddress path_stack[define::kMaxCoro]
 
 thread_local Timer timer;
 thread_local std::queue<uint16_t> hot_wait_queue;
+
+struct PageBatchInsertTable{
+  GlobalAddress page;
+  int currentEntryCnt;
+  int start_i;
+  int insertEntryCnt;
+};
+
+HashTable leafHash;
+int emptyLeafPositionBuffer[kLeafCardinality];
+int updateLeafPositionBuffer[kLeafCardinality];
 
 Tree::Tree(DSM *dsm, uint16_t tree_id) : dsm(dsm), tree_id(tree_id), cache_size(FLAGS_KVCacheSize) {
 
@@ -1078,11 +1090,116 @@ void Tree::run_coroutine(CoroFunc func, int id, int coro_cnt) {
   master();
 }
 
-void search(Key k, Value &v) {
-
+void Tree::batch_insert(KVTS *kvs, int n, CoroContext *cxt,
+                        int coro_id) {
+  // sort by key
+  std::sort(kvs, kvs + n, [](const KVTS &a, const KVTS &b) { return a.k < b.k; });
+  int i = 0;
+  while ( i < n ) {
+    if (enable_cache) {
+      int in_page_idx;
+      auto entry = index_cache->search_from_cache(kvs[i].k, in_page_idx,
+                                                  dsm->getMyThreadID() == 0);
+      if (entry) {
+        int from = i;
+        while (kvs[i].k <= entry->to ) {
+          i = i + 1;
+        }
+        int to = i;
+        //TODO: insert from to to to the index
+        do_batch_insert(kvs, from, to, entry->ptr, in_page_idx, cxt, coro_id);
+      } else {
+        //TODO: search from the root
+      } 
+    } else {
+      // TODO: search from the root
+    }
+  }                      
 }
 
-void insert(Key k, Value) {
+void Tree::do_batch_insert(KVTS *kvs, int from, int to, InternalPage* page, int in_page_idx, CoroContext *cxt,
+                           int coro_id) {
+  auto &rbuf = dsm->get_rbuf(coro_id);
+  auto page_buffer = rbuf.get_page_buffer();
+
+
+  int i = from;
+  GlobalAddress start_p;
+  if (in_page_idx == 0) {
+    start_p = page->hdr.leftmost_ptr;
+  } else {
+    start_p = page->records[in_page_idx].ptr;
+  }
+  in_page_idx += 1;
+  while ( i < to ) {
+    // read leafpage
+    dsm->read_sync(page_buffer, start_p, kInternalPageSize, cxt);
+    auto page = (LeafPage *)page_buffer;
+    int page_start = i;
+    while ( kvs[i].k < page->hdr.highest && i < to) {
+      i++;
+    }
+
+    leafHash.clear();
+    memset(emptyLeafPositionBuffer, 0, sizeof(emptyLeafPositionBuffer));
+    memset(updateLeafPositionBuffer, 0, sizeof(updateLeafPositionBuffer));
+
+    int page_end = i;
+    int page_insert_cnt = page_end - page_start;
+    int page_cur_cnt = 0;
+    // TODO: add header entry cnt
+
+    int empty_pos_cnt = 0;
+    for (int j = 0; j < kLeafCardinality; ++j) {
+      auto &r = page->records[j];
+      if (r.value != kValueNull) {
+        leafHash.insert(r.key, j);
+        page_cur_cnt++;
+      } else {
+        emptyLeafPositionBuffer[empty_pos_cnt] = j;
+        empty_pos_cnt++;
+      }
+    }
+
+    // TODO: add del support
+    int page_after_cnt = page_cur_cnt;
+    for (int k = page_start; k < page_end; k++) {
+      int pos = leafHash.retrieve(kvs[k].k);
+      if (pos != -1) {
+        updateLeafPositionBuffer[k - page_start] = pos;
+      } else {
+        page_after_cnt++;
+      }
+    }
+
+    if (page_after_cnt <= kLeafCardinality ) {
+      RdmaOpRegion rs[page_insert_cnt];
+      int empty_used = 0;
+      for (int k = 0; k < page_insert_cnt; k++) {
+        char *addr;
+        if (updateLeafPositionBuffer[k] != 0) {
+          addr = (char *)&page->records[updateLeafPositionBuffer[k]];
+        } else {
+          assert(empty_used < empty_pos_cnt);
+          addr = (char *)&page->records[emptyLeafPositionBuffer[empty_used]];
+        }
+        rs[k].source = (uint64_t) addr;
+        rs[k].dest = GADD(start_p, addr - (char *)page);
+        rs[k].size = sizeof(LeafEntry);
+        rs[k].is_on_chip = false;
+      }
+
+      //TODO:add async parameter
+      bool async = true;
+      if (async) {
+        dsm->write_batch(rs, page_insert_cnt, false);
+      } else {
+        dsm->write_batch_sync(rs, page_insert_cnt, cxt);
+      }
+    } else {
+      // split and internal insert
+    }
+  }
 
 }
 
