@@ -174,8 +174,8 @@ class FilterPool
 public:
   FilterPool(MonotonicBufferRing<SkipListNode> * buffer) {
     create(buffer);
-    filterCreator = std::thread(filter_thread, this, buffer);
-    bufferClearer = std::thread(buffer_thread, this, buffer);
+    filterCreator = std::thread(std::bind(&FilterPool::filter_thread, this, buffer));
+    bufferClearer = std::thread(std::bind(&FilterPool::buffer_thread, this, buffer));
   }
 
   int contain(Key key, bool &is_latest, int &cur_oldest)
@@ -386,10 +386,10 @@ private:
     cutil::write_unlock(mutex_);
   }
 
-  static void filter_thread(void * args[]) {
+  static void filter_thread(FilterPool* fp, MonotonicBufferRing<SkipListNode>* buffer) {
     bindCore(filterCore);
-    FilterPool * fp = static_cast<FilterPool *>(args[0]);
-    MonotonicBufferRing<SkipListNode> * buffer = static_cast<MonotonicBufferRing<SkipListNode> *>(args[1]);
+    // FilterPool * fp = static_cast<FilterPool *>(args[0]);
+    // MonotonicBufferRing<SkipListNode> * buffer = static_cast<MonotonicBufferRing<SkipListNode> *>(args[1]);
     struct timespec sleep_time;
     sleep_time.tv_nsec = filter_thread_interval;
     sleep_time.tv_sec = 0;
@@ -407,10 +407,10 @@ private:
     }
   }
 
-  static void buffer_thread(void * args[]) {
+  static void buffer_thread(FilterPool* fp, MonotonicBufferRing<SkipListNode>* buffer) {
     bindCore(filterCore);
-    FilterPool *fp = static_cast<FilterPool *>(args[0]);
-    MonotonicBufferRing<SkipListNode> *buffer = static_cast<MonotonicBufferRing<SkipListNode>*>(args[1]);
+    // FilterPool *fp = static_cast<FilterPool *>(args[0]);
+    // MonotonicBufferRing<SkipListNode> *buffer = static_cast<MonotonicBufferRing<SkipListNode>*>(args[1]);
     struct timespec sleep_time;
     sleep_time.tv_nsec = filter_thread_interval;
     sleep_time.tv_sec = 0;
@@ -509,10 +509,10 @@ public:
   }
 
   void test_KV_cache() {
-    for (int i=0; i < 24; i++ ) {
-      std::thread(insert_thread_run, i);
-    }
-    std::thread(clear_thread_run);
+    // for (int i=0; i < 24; i++ ) {
+    //   std::thread(insert_thread_run, i);
+    // }
+    // std::thread(clear_thread_run);
   }
 
   void clear_TS(TS oldest_TS) {
