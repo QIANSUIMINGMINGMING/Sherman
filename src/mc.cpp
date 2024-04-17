@@ -55,6 +55,7 @@ multicastCM::multicastCM(): mcIp(FLAGS_mcIp), mcGroups(FLAGS_mcGroups), isSender
         exit(1);
 
     pthread_create(&cmathread, NULL, cma_thread_manager, this);
+    // maintainer = std::thread(mc_maintainer, this);
     /*
     * Pause to give SM chance to configure switches.  We don't want to
     * handle reliability issue in this simple test program.
@@ -140,7 +141,7 @@ int multicastCM::init_node(struct multicast_node *node) {
     }
 
     // cqe = message_count ? message_count * 2 : 2;
-    cqe = 32;
+    cqe = 128;
     node->send_cq = ibv_create_cq(node->cma_id->verbs, cqe, NULL, NULL, 0);
     node->recv_cq = ibv_create_cq(node->cma_id->verbs, cqe, NULL, NULL, 0);
 
@@ -151,8 +152,8 @@ int multicastCM::init_node(struct multicast_node *node) {
     }
 
     memset(&init_qp_attr_ex, 0, sizeof(init_qp_attr_ex));
-    init_qp_attr_ex.cap.max_send_wr = 32;
-    init_qp_attr_ex.cap.max_recv_wr = 32;
+    init_qp_attr_ex.cap.max_send_wr = 128;
+    init_qp_attr_ex.cap.max_recv_wr = 128;
     init_qp_attr_ex.cap.max_send_sge = 1;
     init_qp_attr_ex.cap.max_recv_sge = 1;
     init_qp_attr_ex.qp_context = node;
@@ -398,7 +399,7 @@ int multicastCM::resolve_nodes() {
 }
 
 void *multicastCM::cma_thread_worker(void *arg) {
-    bindCore(95);
+    bindCore(mcCmaCore);
     struct rdma_cm_event *event;
     int ret;
 
@@ -426,8 +427,40 @@ void *multicastCM::cma_thread_worker(void *arg) {
     return NULL;
 }
 
+void *multicastCM::mc_maintainer(void *args[]) {
+    int id = (*(static_cast<int16_t *>(args[0])));
+    bindCore(rpcCore - id);
+    multicastCM *me = static_cast<multicastCM *>(args[1]);
+    multicast_node *node = &me->nodes[id];
+    struct ibv_wc wc_buffer[kMcMaxPostList];
+    struct ibv_recv_wr recv_wr[kMcMaxPostList], *bad_recv_wr;
+    struct ibv_sge sgl[kMcMaxPostList];
+
+    while (true) {
+        int num_comps = ibv_poll_cq(node->recv_cq, kpostlist, wc_buffer);
+        assert(num_comps >= 0);
+        if (num_comps == 0) continue;
+
+
+
+        for (int w_i = 0; w_i < num_comps; w_i ++) {
+            sgl[w_i].length = kMcPageSize;
+            sgl[w_i].lkey = me->mr->lkey;
+            // sgl[w_i].addr = (uint64_t)me->mbr.getUnderlyingBuffer() + id * kMcPageSize;
+            sgl[w_i].addr = (uintptr_t) node->messages + w_i * kMcPageSize;
+
+            recv_wr[w_i].sg_list = &sgl[w_i];
+            recv_wr[w_i].num_sge = 1;
+            recv_wr[w_i].next = w_i == num_comps - 1 ? nullptr : &recv_wr[w_i + 1];
+        }
+        //Post a batch of RECVs
+        int ret = ibv_post_recv(node->cma_id->qp, recv_wr, &bad_recv_wr);
+        assert(ret == 0);
+    }
+}
+
 void *multicastCM::cma_thread_manager(void *arg) {
-    bindCore(95);
+    bindCore(mcCmaCore);
     multicastCM *mckey = static_cast<multicastCM *>(arg);
     pthread_t workers[mckey->getGroupSize()];
 

@@ -21,7 +21,7 @@ AbstractMessageConnection::AbstractMessageConnection(
 }
 
 void AbstractMessageConnection::initRecv() {
-  subNR = messageNR / kBatchCount;
+  subNR = messageNR / kBatchCount; //96 / 4 = 24
 
   for (int i = 0; i < kBatchCount; ++i) {
     recvs[i] = new ibv_recv_wr[subNR];

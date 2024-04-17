@@ -10,6 +10,7 @@
 #include <netdb.h>
 #include <unistd.h>
 #include <getopt.h>
+#include <thread>
 #include <rdma/rdma_cma.h>
 #include <infiniband/ib.h>
 
@@ -77,8 +78,12 @@ private:
     static void *cma_thread_worker(void *arg);
     static void *cma_thread_manager(void *arg);
 
+    static void *mc_maintainer(void *args[]);
+
 private:
     pthread_t cmathread;
+    std::thread maintainers[kMaxRpcCoreNum];
+
     struct multicast_node *nodes;
     int conn_index;
     int connects_left;

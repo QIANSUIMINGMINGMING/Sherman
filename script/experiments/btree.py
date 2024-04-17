@@ -2,7 +2,7 @@ import config
 import os
 from distexprunner import *
 
-NUMBER_NODES = 4
+NUMBER_NODES = 5
 
 parameter_grid = ParameterGrid(
     worker=[4,8,16,32,64],
@@ -37,34 +37,40 @@ def restart_memcached(servers):
     assert(all(p.wait() == 0 for p in procs))
 
 @reg_exp(servers=config.server_list[:NUMBER_NODES], max_restarts=1)
-def test_btree(servers):
-    pass
-    # servers.cd("/home/muxi/ccpro/Sherman/build")
-    # for i in range(1, NUMBER_NODES):
-    #     cmd = f'numactl --membind=1 ./benchmark -ownIp={servers[i].ibIp} -computeNodes=4 -nodeId={i}'        
-    #     servers[i].run_cmd(cmd).wait()
-    # servers.cd("/home/muxi/ccpro/DM-cooperation/build")
-    # cmds = []
-    # for i in range(1, NUMBER_NODES):
-    #     cmd = f'numactl --membind=1 ./testmCM -ownIp={servers[i].ibIp} -computeNodes=4 -nodeId={i}'        
-    #     cmds += [servers[i].run_cmd(cmd)]
-    
-    # if not all(cmd.wait() == 0 for cmd in cmds):
-    #     return Action.RESTART
+def get_current_time(servers):
+    servers.cd("/home/muxi/ccpro/Sherman/build")
+    procs = [s.run_cmd("./filter") for s in servers]
+    assert(all(p.wait() == 0 for p in procs))
 
-    # cmds = []
-    # cmd = f'numactl --membind=1 ./testmCM -ownIp={servers[0].ibIp} -port=20886 -worker={worker}'
-    # cmds += [servers[0].run_cmd(cmd)]
-
-    # work = worker
-    # numberNodes=1
-    # if worker >=4:
-    #     work = int(worker/4)
-    #     numberNodes=4
+# @reg_exp(servers=config.server_list[:NUMBER_NODES], max_restarts=1)
+# def test_btree(servers):
+#     pass
+#     # servers.cd("/home/muxi/ccpro/Sherman/build")
+#     # for i in range(1, NUMBER_NODES):
+#     #     cmd = f'numactl --membind=1 ./benchmark -ownIp={servers[i].ibIp} -computeNodes=4 -nodeId={i}'        
+#     #     servers[i].run_cmd(cmd).wait()
+#     # servers.cd("/home/muxi/ccpro/DM-cooperation/build")
+#     # cmds = []
+#     # for i in range(1, NUMBER_NODES):
+#     #     cmd = f'numactl --membind=1 ./testmCM -ownIp={servers[i].ibIp} -computeNodes=4 -nodeId={i}'        
+#     #     cmds += [servers[i].run_cmd(cmd)]
     
-    # for i in range(1, numberNodes+1):
-    #     cmd = f'numactl --membind=1 ./testCM -ownIp={servers[i].ibIp} -port=20886 -worker={work} -run_for_seconds=30'
-    #     cmds += [servers[i].run_cmd(cmd)]
+#     # if not all(cmd.wait() == 0 for cmd in cmds):
+#     #     return Action.RESTART
+
+#     # cmds = []
+#     # cmd = f'numactl --membind=1 ./testmCM -ownIp={servers[0].ibIp} -port=20886 -worker={worker}'
+#     # cmds += [servers[0].run_cmd(cmd)]
+
+#     # work = worker
+#     # numberNodes=1
+#     # if worker >=4:
+#     #     work = int(worker/4)
+#     #     numberNodes=4
+    
+#     # for i in range(1, numberNodes+1):
+#     #     cmd = f'numactl --membind=1 ./testCM -ownIp={servers[i].ibIp} -port=20886 -worker={work} -run_for_seconds=30'
+#     #     cmds += [servers[i].run_cmd(cmd)]
         
-    # if not all(cmd.wait() == 0 for cmd in cmds):
-    #     return Action.RESTART
+#     # if not all(cmd.wait() == 0 for cmd in cmds):
+#     #     return Action.RESTART

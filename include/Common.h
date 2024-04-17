@@ -121,11 +121,25 @@ using TS = uint64_t;
 
 constexpr Key kKeyMin = std::numeric_limits<Key>::min();
 constexpr Key kKeyMax = std::numeric_limits<Key>::max();
+
+constexpr TS kTSMax = std::numeric_limits<TS>::max();
+constexpr TS kTSMin = std::numeric_limits<TS>::min();
 constexpr Value kValueNull = 0;
 
 // Note: our RNICs can read 1KB data in increasing address order (but not for 4KB)
 constexpr uint32_t kInternalPageSize = 1024;
 constexpr uint32_t kLeafPageSize = 1024;
+constexpr uint32_t kMcPageSize = 1024;
+
+// for core binding
+constexpr uint16_t mcCmaCore = 95;
+constexpr uint16_t filterCore = 94;
+constexpr uint16_t rpcCore = 93;
+constexpr uint16_t kMaxRpcCoreNum = 8;
+
+//for Rpc
+constexpr int kMcMaxPostList = 128;
+constexpr int kpostlist = 32;
 
 __inline__ unsigned long long rdtsc(void) {
   unsigned hi, lo;
@@ -196,5 +210,83 @@ class HugePages
    ~HugePages() { munmap(memory, size); }
 };
 
+struct myClock
+{
+    using duration   = std::chrono::nanoseconds;
+    using rep        = duration::rep;
+    using period     = duration::period;
+    static constexpr bool is_steady = false;
+
+    static uint64_t get_ts()
+    {
+        timespec ts;
+        if (clock_gettime(CLOCK_REALTIME, &ts))
+            throw 1;
+        uint64_t timestamp = (uint64_t)(ts.tv_sec * 1000000000) + (uint64_t)(ts.tv_nsec); 
+        return timestamp;
+    }
+};
+
+// olc lock
+namespace cutil{
+using ull_t = unsigned long long;
+
+inline bool is_locked(ull_t version) {
+  return ((version & 0b10) == 0b10);
+}
+inline bool is_obsolete(ull_t version) {
+  return ((version & 1) == 1);
+}
+
+// the following API may be reimplemented in node.cuh
+inline cutil::ull_t read_lock_or_restart(
+    const std::atomic<cutil::ull_t> &version_lock_obsolete, bool &need_restart) {
+  cutil::ull_t version = version_lock_obsolete.load();
+  if (cutil::is_locked(version) || cutil::is_obsolete(version)) {
+    need_restart = true;
+  }
+  return version;
+}
+
+inline void read_unlock_or_restart(
+    const std::atomic<cutil::ull_t> &version_lock_obsolete, cutil::ull_t start_read,
+    bool &need_restart) {
+  // TODO: should we use spinlock to await?
+  need_restart = (start_read != version_lock_obsolete.load());
+}
+
+inline  void check_or_restart(
+    const std::atomic<cutil::ull_t> &version_lock_obsolete, cutil::ull_t start_read,
+    bool &need_restart) {
+  read_unlock_or_restart(version_lock_obsolete, start_read, need_restart);
+}
+
+inline void upgrade_to_write_lock_or_restart(
+    std::atomic<cutil::ull_t> &version_lock_obsolete, cutil::ull_t &version,
+    bool &need_restart) {
+  // if (version == atomicCAS(&version_lock_obsolete, version, version + 0b10)) {
+  bool success = version_lock_obsolete.compare_exchange_strong(version, version + 0b10);
+  if (success) {
+    version = version + 0b10;
+  } else {
+    need_restart = true;
+  }
+}
+
+inline void write_unlock(
+    std::atomic<cutil::ull_t> &version_lock_obsolete) {
+  version_lock_obsolete.fetch_add(0b10);
+}
+
+inline void write_unlock(
+    std::atomic<cutil::ull_t> * version_lock_obsolete) {
+  version_lock_obsolete->fetch_add(0b10);
+}
+
+inline void write_unlock_obsolete(
+    std::atomic<cutil::ull_t> &version_lock_obsolete) {
+  version_lock_obsolete.fetch_add(0b11);
+}
+}
 
 #endif /* __COMMON_H__ */
