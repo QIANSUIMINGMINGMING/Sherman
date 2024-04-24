@@ -14,6 +14,11 @@ constexpr int kMcCardinality =
     (kMcPageSize - sizeof(int) - 40) /
     sizeof(KVTS);
 
+struct TransferObj {
+    int psn{-1};
+    KVTS elements[kMcCardinality];
+};
+
 
 class McPage {
 public:
@@ -66,11 +71,6 @@ public:
     }
 
 private:
-    struct TransferObj {
-        int psn{-1};
-        KVTS elements[kMcCardinality];
-    };
-
     void emit(TransferObj * obj) {
 
     }

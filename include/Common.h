@@ -16,8 +16,31 @@
 
 #include "WRLock.h"
 
+// -------------------------------------------------------------------------------------
+// ensure is similar to assert except that it is never out compiled
+#define always_check(e)                                                   \
+   do {                                                                   \
+      if (__builtin_expect(!(e), 0)) {                                    \
+         std::stringstream ss;                                            \
+         ss << __func__ << " in " << __FILE__ << ":" << __LINE__ << '\n'; \
+         ss << " msg: " << std::string(#e);                               \
+         throw std::runtime_error(ss.str());                              \
+      }                                                                   \
+   } while (0)
+
+#define ENSURE_ENABLED 1
+#ifdef ENSURE_ENABLED
+#define ensure(e) always_check(e);
+#else
+#define ensure(e) do {} while(0);
+#endif
+
+using u64 = uint64_t;
+
 #define NUMA_1_CPU_s1 24
 #define NUMA_1_CPU_s2 72
+
+#define KEY_PAGE
 
 // CONFIG_ENABLE_EMBEDDING_LOCK and CONFIG_ENABLE_CRC
 // **cannot** be ON at the same time
@@ -129,16 +152,25 @@ constexpr Value kValueNull = 0;
 // Note: our RNICs can read 1KB data in increasing address order (but not for 4KB)
 constexpr uint32_t kInternalPageSize = 1024;
 constexpr uint32_t kLeafPageSize = 1024;
+
+#if defined(SINGLE_KEY) 
 constexpr uint32_t kMcPageSize = 1024;
+#elif defined(KEY_PAGE)
+constexpr uint32_t kMcPageSize = 1024; 
+#elif defined(FILTER_PAGE)
+constexpr uint32_t kMcPageSize = 1024
+#endif
 
 // for core binding
 constexpr uint16_t mcCmaCore = 95;
 constexpr uint16_t filterCore = 94;
 constexpr uint16_t rpcCore = 93;
-constexpr uint16_t kMaxRpcCoreNum = 8;
+constexpr uint16_t kMaxRpcCoreNum = 16;
+constexpr uint16_t dirCore = rpcCore - kMaxRpcCoreNum;
+constexpr uint16_t kMaxRwCoreNum = 4;
 
 //for Rpc
-constexpr int kMcMaxPostList = 128;
+constexpr int kMcMaxPostList = 256;
 constexpr int kpostlist = 32;
 
 __inline__ unsigned long long rdtsc(void) {

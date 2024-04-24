@@ -17,6 +17,9 @@
 #include "memManager.h"
 #include "flags.h"
 #include "Common.h"
+#include "KVCache.h"
+#include "McPage.h"
+#include "third_party/readerwritercircularbuffer.h"
 
 namespace rdmacm {
 namespace multicast {
@@ -37,11 +40,16 @@ struct multicast_node {
     uint32_t remote_qpn;
     uint32_t remote_qkey;
     uint8_t * messages;
+    struct ibv_recv_wr recv_wr[kMcMaxPostList];
+    struct ibv_sge recv_sgl[kMcMaxPostList];
+    struct ibv_send_wr send_wr[kMcMaxPostList];
+    struct ibv_sge send_sgl[kMcMaxPostList];
+    int send_pos{0};
 };
 
 struct rdma_event_channel *create_first_event_channel();
 int get_addr(std::string dst, struct sockaddr *addr);
-int verify_port(struct multicast *node);
+int verify_port(struct multicast_node *node);
 
 enum SR {SEND, RECV};
 
@@ -53,10 +61,11 @@ public:
     int test_node();
     int getGroupSize(){return mcGroups;}
     struct multicast_node *getNode(int i) {return &nodes[i];}
+    moodycamel::BlockingReaderWriterCircularBuffer<TransferObj *> *getPageQueue(int i) {return pageQueues[i];}
 
 private:
     int init_node(struct multicast_node *node);
-    int create_message(struct multicast_node *node, int message_size, int message_count);
+    int create_message(struct multicast_node *node, int message_size = kMcPageSize, int message_count = kMcMaxPostList);
     void destroy_node(struct multicast_node *node); 
     int alloc_nodes (int connections);
 
@@ -66,7 +75,9 @@ private:
     int post_recvs(struct multicast_node *node);
     int post_sends(struct multicast_node *node, int signal_flag);
 
-    int handle_recv(struct multicast_node *node);
+    void send_message(multicast_node *node, uint8_t *message);
+
+    void handle_recv(struct multicast_node *node, int id);
 
     int cma_handler(struct rdma_cm_id *cma_id, struct rdma_cm_event *event);
 	int addr_handler(struct multicast_node *node);
@@ -78,11 +89,12 @@ private:
     static void *cma_thread_worker(void *arg);
     static void *cma_thread_manager(void *arg);
 
-    static void *mc_maintainer(void *args[]);
+    static void *mc_maintainer(uint16_t id, multicastCM *me);
 
 private:
     pthread_t cmathread;
     std::thread maintainers[kMaxRpcCoreNum];
+    moodycamel::BlockingReaderWriterCircularBuffer<TransferObj *> *pageQueues[kMaxRpcCoreNum];
 
     struct multicast_node *nodes;
     int conn_index;

@@ -12,7 +12,7 @@ constexpr int hash_fuction_count = 3;
 
 class Bloomfilter {
 public:
-    Bloomfilter();
+    Bloomfilter() {}
     inline void insert(uint64_t object) {
         hash(object);
         for (size_t i = 0; i < hash_fuction_count; i++) {

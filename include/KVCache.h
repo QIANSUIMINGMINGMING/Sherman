@@ -31,6 +31,10 @@ struct KVTS
   KVTS() {}
   KVTS(Key k, Value v, TS ts) : k(k), v(v), ts(ts) {}
 
+  inline void self_print() {
+    printf("KVTS with K %lu, TS %lu, V %lu\n", k, ts, v);
+  }
+
   inline bool operator>(const KVTS &rhs) const
   {
     return k != rhs.k ? k > rhs.k : ts > rhs.ts;
@@ -51,48 +55,32 @@ template <typename T>
 class MonotonicBufferRing
 {
 public:
-  MonotonicBufferRing(int size) : size(size), buffer(size * sizeof(T)) {}
+  MonotonicBufferRing(size_t size) : size(size), buffer(size * sizeof(T)) {}
 
-  T *alloc(int & start_offset)
+  T *alloc(size_t & start_offset)
   {
-    int pos = offset.fetch_add(1);
+    size_t pos = offset.fetch_add(1);
     while (!have_space(pos, 1))
       ;
     return &buffer[pos % size];
     start_offset = pos % size;
   }
 
-  T *alloc(int n, int & start_offset)
+  T *alloc(size_t n, size_t & start_offset)
   {
-    int pos = offset.fetch_add(n);
+    size_t pos = offset.fetch_add(n);
     while (!have_space(pos, n))
       ;
     return &buffer[pos % size];
     start_offset = pos % size;
   }
 
-  int check_distance(int start_offset, int & cur_offset) {
+  size_t check_distance(size_t start_offset, size_t & cur_offset) {
     cur_offset = offset.load() % size;
     return RING_SUB(cur_offset, start_offset, size);
   }
 
-  // void release(int n)
-  // {
-  // restart:
-  //   bool need_restart = false;
-  //   cutil::ull_t cur_v = cutil::read_lock_or_restart(start_mutex, need_restart);
-  //   if (need_restart) {
-  //     goto restart;
-  //   }
-  //   cutil::upgrade_to_write_lock_or_restart(start_mutex, cur_v, need_restart);
-  //   if (need_restart) {
-  //     goto restart;
-  //   }
-  //   start += n;
-  //   cutil::write_unlock(start_mutex);
-  // }
-
-  void release(int start_offset) {
+  void release(size_t start_offset) {
     restart:
     bool need_restart = false;
     cutil::ull_t cur_v = cutil::read_lock_or_restart(start_mutex, need_restart);
@@ -108,17 +96,17 @@ public:
   }
 
   //operator[]
-  T &operator[](int i)
+  T &operator[](size_t i)
   {
     return buffer[i % size];
   }
 
-  inline int getOffset() {
+  inline size_t getOffset() {
     return offset.load() % size;
   }
 
 private:
-  inline bool have_space(int old, int n)
+  inline bool have_space(size_t old, size_t n)
   {
   restart:
     bool need_restart = false;
@@ -134,7 +122,7 @@ private:
     return ret;
   }
 
-  int size;
+  size_t size;
   HugePages<T> buffer;
   size_t start{0};
   std::atomic<size_t> offset{0};
@@ -149,7 +137,7 @@ constexpr TS START_TS = kTSMin;
 struct FilterPoolNode
 {
   Bloomfilter *filter;
-  int start_offset{-1};
+  size_t start_offset{kKeyMax};
   TS endTS{NULL_TS};
   std::atomic<cutil::ull_t> skiplist_lock_;
 
@@ -165,7 +153,7 @@ struct SkipListNode
 {
   KVTS kvts;
   uint16_t level;
-  uint32_t next_ptrs[kMaxLevel]{0};
+  size_t next_ptrs[kMaxLevel]{0};
   //next_ptrs[0] is front
 };
 
@@ -176,7 +164,10 @@ public:
     create(buffer);
     filterCreator = std::thread(std::bind(&FilterPool::filter_thread, this, buffer));
     bufferClearer = std::thread(std::bind(&FilterPool::buffer_thread, this, buffer));
+    releaser = std::thread(std::bind(&FilterPool::clear_thread, this));
   }
+
+  FilterPool() {}
 
   int contain(Key key, bool &is_latest, int &cur_oldest)
   {
@@ -308,15 +299,31 @@ public:
   }
 
   //operator []
-  FilterPoolNode &operator[](int i)
+  inline FilterPoolNode &operator[](int i)
   {
     return filters[i];
   } 
 
-  void updateGlobalTS(TS ts) {
+  inline void updateGlobalTS(TS ts) {
     TS_mutex_.lock();
     oldest_time = ts;
     TS_mutex_.unlock();
+  }
+
+  inline void RlockGlobalTS() {
+    TS_mutex_.lock_shared();
+  }
+
+  inline void RunlockGlobalTS() {
+    TS_mutex_.unlock_shared();
+  }
+
+  inline void start_clearer() {
+    clear_blocker.store(0);
+  }
+
+  inline  TS getGlobalTS() {
+    return oldest_time;
   }
 
 private:
@@ -339,7 +346,7 @@ private:
     if (!isEmpty())
       filters[latest - 1].endTS = myClock::get_ts();
     // create first skiplist node
-    int start_offset;
+    size_t start_offset;
     buffer->alloc(start_offset);
     filters[latest].start_offset = start_offset;
     latest = RING_ADD(latest, 1, kMaxFilters);
@@ -378,13 +385,38 @@ private:
       assert(filters[(oldest + i) % kMaxFilters].endTS < oldest_time);
       filters[(oldest + i) % kMaxFilters].endTS = NULL_TS;
       filters[(oldest + i) % kMaxFilters].filter->clear();
-      filters[(oldest + i) % kMaxFilters].start_offset = -1;
+      filters[(oldest + i) % kMaxFilters].start_offset = kKeyMax;
       filters[(oldest + i) % kMaxFilters].skiplist_lock_.store(0);
     }
     oldest = RING_ADD(oldest, n, kMaxFilters);
     delay_free_queue.push(filters[oldest].start_offset);
     cutil::write_unlock(mutex_);
   }
+
+  // a test function, will be replaced by a 
+  static void clear_thread(FilterPool* fp) {
+    bindCore(filterCore);
+    struct timespec sleep_time;
+    sleep_time.tv_nsec = filter_thread_interval;
+    sleep_time.tv_sec = 0;
+    while (!(fp->clear_blocker.load())) {
+      nanosleep(&sleep_time, nullptr);
+    }
+    while (true) {
+      sleep(1);
+      TS ts = myClock::get_ts();
+      int i = 0;
+      while (fp->filters[RING_ADD(fp->oldest, i, kMaxFilters)].endTS < fp->oldest_time) {
+        i++;
+      }
+      if (i > 0) { 
+        fp->release(i); 
+      }
+      sleep(1);
+      fp->updateGlobalTS(ts);
+    }
+  }
+
 
   static void filter_thread(FilterPool* fp, MonotonicBufferRing<SkipListNode>* buffer) {
     bindCore(filterCore);
@@ -398,8 +430,8 @@ private:
       if (fp->isFull()) {
         fp->release(10);
       }
-      int cur_offset;
-      int cur_distance = buffer->check_distance(fp->filters[fp->latest].start_offset, cur_offset);
+      size_t cur_offset;
+      size_t cur_distance = buffer->check_distance(fp->filters[fp->latest].start_offset, cur_offset);
       if (cur_distance > 35000) {
         fp->create(buffer);
       }
@@ -415,12 +447,14 @@ private:
     sleep_time.tv_nsec = filter_thread_interval;
     sleep_time.tv_sec = 0;
     while (true) {
-      int last = 0;
+      size_t last = kKeyMax;
       while (!fp->delay_free_queue.empty()) {
         last = fp->delay_free_queue.front();
         fp->delay_free_queue.pop();
       }
-      buffer->release(last);
+      if (last != kKeyMax) {
+        buffer->release(last);
+      }
       nanosleep(&sleep_time, nullptr);
     }
   }
@@ -441,8 +475,10 @@ private:
   std::atomic<cutil::ull_t> mutex_;
   std::thread bufferClearer;
   std::thread filterCreator;
-  std::queue<int> delay_free_queue;
+  std::thread releaser;
+  std::queue<size_t> delay_free_queue;
   std::shared_mutex TS_mutex_;
+  std::atomic<int> clear_blocker{0};
   TS oldest_time{START_TS};
 };
 
@@ -451,12 +487,24 @@ constexpr int directFindBar = 100;
 class KVCache
 {
 public:
-  KVCache(int cache_size): cache_size(cache_size), buffer(cache_size), filter_pool(&buffer){
+  KVCache(size_t cache_size): cache_size(cache_size), buffer(cache_size), filter_pool(&buffer){
+  }
+
+  KVCache(size_t cache_size, bool no_fp): cache_size(cache_size), buffer(cache_size), filter_pool(){
+    size_t start_offset;
+    buffer.alloc(start_offset);
+    filter_pool[0].start_offset = start_offset;
+  }
+
+  void insert(KVTS *kvts) {
+    insert(kvts->k, kvts->ts, kvts->v); 
   }
 
   void insert(Key k, TS ts, Value v)
   {
-    int node_offset;
+    filter_pool.RlockGlobalTS();
+    assert (ts > filter_pool.getGlobalTS()); 
+    size_t node_offset;
     int sln_level = randomHeight();
     auto sln = buffer.alloc(1, node_offset);
     sln->kvts.k = k;
@@ -470,49 +518,64 @@ public:
     } else {
       skiplist_insert(sln, node_offset, filter);
     }
-    filter->filter->insert(k); 
+    filter->filter->insert(k);
+    filter_pool.RunlockGlobalTS(); 
+  }
+
+  void test_buffer_insert(Key k, TS ts, Value v, bool is_latest) {
+    size_t node_offset = 0;
+    int sln_level = randomHeight();
+    auto sln = buffer.alloc(1, node_offset);
+    sln->kvts.k = k;
+    sln->kvts.ts = ts;
+    sln->kvts.v = v;
+    sln->level = sln_level;
+    FilterPoolNode * filter = &filter_pool[0];
+    printf("insert %lu", k);
+    if (is_latest) {
+      skiplist_insert_latest(sln, node_offset, filter);
+    } else {
+      skiplist_insert(sln, node_offset, filter);
+    }
   }
 
   bool search(Key k, Value & v) {
+    filter_pool.RlockGlobalTS();
     bool filter_is_latest;
     int pre_oldest;
     int filter_idx = filter_pool.contain(k, filter_is_latest, pre_oldest);
     if (filter_idx == -1) {
+      filter_pool.RunlockGlobalTS();
       return false;
     }
+    assert(filter_pool[filter_idx].endTS > filter_pool.getGlobalTS());
     auto filter = &filter_pool[filter_idx];
     if (filter_is_latest) {
-      if (skiplist_search_latest(k, v, filter))
+      if (skiplist_search_latest(k, v, filter)) {
+        filter_pool.RunlockGlobalTS();
         return true;
+      }
     }
     while (!skiplist_search(k, v, filter)) {
       filter_idx = filter_pool.contain(k, filter_idx, pre_oldest);
       if (filter_idx == -1) {
+        filter_pool.RunlockGlobalTS();
         return false;
       }
+      assert(filter_pool[filter_idx].endTS > filter_pool.getGlobalTS());
       filter = &filter_pool[filter_idx];
     }
+    filter_pool.RunlockGlobalTS();
     return true;
   }
 
-  void insert_thread_run(int id) {
-    while (true) {
-      Key k = rand();
-      Value v = rand();
-      TS ts = myClock::get_ts();
-      insert(k, ts, v);
+  void test_buffer_search(Key k, Value & v, bool is_latest) {
+    FilterPoolNode * filter = &filter_pool[0];
+    if (is_latest) {
+      skiplist_search_latest(k, v, filter);
+    } else {
+      skiplist_search(k, v, filter);
     }
-  }
-
-  void clear_thread_run() {
-
-  }
-
-  void test_KV_cache() {
-    // for (int i=0; i < 24; i++ ) {
-    //   std::thread(insert_thread_run, i);
-    // }
-    // std::thread(clear_thread_run);
   }
 
   void clear_TS(TS oldest_TS) {
@@ -520,10 +583,10 @@ public:
   }
 
 private:
-  void skiplist_insert(SkipListNode *sln, uint32_t node_offset, FilterPoolNode *filter)
+  void skiplist_insert(SkipListNode *sln, size_t node_offset, FilterPoolNode *filter)
   {
     //random int level
-    int cur_pos = filter->start_offset;
+    size_t cur_pos = filter->start_offset;
   restart:
     bool need_restart = false;
     auto cur_v = cutil::read_lock_or_restart(filter->skiplist_lock_, need_restart);
@@ -560,16 +623,16 @@ private:
     cutil::write_unlock(filter->skiplist_lock_);
   }
 
-  inline void unlock_previous(int start_pos, int start_level, int level) {
+  inline void unlock_previous(size_t start_pos, int start_level, int level) {
     for (int i = start_level; i< level; i++) {
-      int pos = insert_buffer[i] - start_pos;
+      size_t pos = insert_buffer[i] - start_pos;
       cutil::write_unlock(Latest_lock_buffer[0][pos][i]);
     }
   }
 
-  void skiplist_insert_latest(SkipListNode *sln, uint32_t node_offset, FilterPoolNode * filter) {
-    int start_pos = filter->start_offset;
-    int cur_pos = start_pos;
+  void skiplist_insert_latest(SkipListNode *sln, size_t node_offset, FilterPoolNode * filter) {
+    size_t start_pos = filter->start_offset;
+    size_t cur_pos = start_pos;
   restart:
     bool need_restart = false;
     auto skiplist_head = &buffer[filter->start_offset];
@@ -671,11 +734,11 @@ private:
   }
 
   bool skiplist_search_latest(Key k, Value & v, FilterPoolNode * filter) {
-    int start_pos = filter->start_offset;
-    int cur_pos = start_pos;
-    int cur_offset;
+    size_t start_pos = filter->start_offset;
+    size_t cur_pos = start_pos;
+    size_t cur_offset;
     if (buffer.check_distance(start_pos, cur_offset) < directFindBar) {
-      for (int i = start_pos; i < cur_offset;i++) {
+      for (size_t i = start_pos; i < cur_offset;i++) {
         if (buffer[i].kvts.k == k) {
           v = buffer[i].kvts.v;
           return true;
@@ -736,10 +799,10 @@ private:
     return height;
   }
 
-  int cache_size;
+  size_t cache_size;
   MonotonicBufferRing<SkipListNode> buffer;
   std::atomic<cutil::ull_t> Latest_lock_buffer[2][65536][kMaxLevel];
   std::atomic<uint8_t> fliper{0};
   FilterPool filter_pool;
-  static thread_local uint32_t insert_buffer[kMaxLevel];
+  static thread_local size_t insert_buffer[kMaxLevel];
 };
