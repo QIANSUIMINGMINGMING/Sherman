@@ -13,7 +13,7 @@
 #include <iostream>
 #include <oneapi/tbb/concurrent_hash_map.h>
 
-#define CONFIG_ENABLE_CRC
+// #define CONFIG_ENABLE_CRC
 
 class IndexCache;
 
