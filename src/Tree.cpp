@@ -1289,6 +1289,7 @@ void Tree::coro_worker(CoroYield &yield, RequstGen *gen, int coro_id) {
       Value v;
       this->search(key, v, &ctx, coro_id);
       assert(v == v1 || v == v2);
+      assert(v == v1 || v == v2 || v == kValueNull);
     } else {
       rand() % 2 == 0 ? this->insert(key, v1, &ctx, coro_id) : this->insert(key, v2, &ctx, coro_id);
     }
