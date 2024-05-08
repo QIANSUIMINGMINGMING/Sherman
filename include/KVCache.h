@@ -62,8 +62,8 @@ public:
     size_t pos = offset.fetch_add(1);
     while (!have_space(pos, 1))
       ;
-    return &buffer[pos % size];
     start_offset = pos % size;
+    return &buffer[pos % size];
   }
 
   T *alloc(size_t n, size_t & start_offset)
@@ -71,8 +71,8 @@ public:
     size_t pos = offset.fetch_add(n);
     while (!have_space(pos, n))
       ;
-    return &buffer[pos % size];
     start_offset = pos % size;
+    return &buffer[pos % size];
   }
 
   size_t check_distance(size_t start_offset, size_t & cur_offset) {
@@ -134,12 +134,17 @@ constexpr int kMaxFilters = 1024 * 1024;
 constexpr TS NULL_TS = kTSMax;
 constexpr TS START_TS = kTSMin;
 
+constexpr int kMaxSkipListData = 2 * 65536;
+constexpr float kCreateDataRatio = 0.9;
+
 struct FilterPoolNode
 {
   Bloomfilter *filter;
   size_t start_offset{kKeyMax};
   TS endTS{NULL_TS};
   std::atomic<cutil::ull_t> skiplist_lock_;
+  uint8_t my_fliper;
+  std::atomic<int> olc_thread_count{0};
 
   FilterPoolNode()
   {
@@ -153,7 +158,7 @@ struct SkipListNode
 {
   KVTS kvts;
   uint16_t level;
-  size_t next_ptrs[kMaxLevel]{0};
+  size_t next_ptrs[kMaxLevel];
   //next_ptrs[0] is front
 };
 
@@ -273,7 +278,11 @@ public:
     }
     int back = latest > oldest ? latest : latest + kMaxFilters;
 
-    if (filters[back - 1].endTS < ts && ts <= filters[back].endTS)
+    if (back - 1 == oldest) {
+      return &filters[oldest];
+    }
+
+    if (filters[back - 2].endTS < ts && ts <= filters[back - 1].endTS)
     {
       cutil::read_unlock_or_restart(mutex_, cur_v, need_restart);
       if (need_restart) {
@@ -283,7 +292,7 @@ public:
       return &filters[back - 1];
     }
 
-    for (int i = back - 1; i > oldest + 1; i--)
+    for (int i = back - 2; i > oldest; i--)
     {
       int idx = (i % kMaxFilters) - 1;
       if (filters[idx - 1].endTS < ts && ts <= filters[idx].endTS)
@@ -319,7 +328,7 @@ public:
   }
 
   inline void start_clearer() {
-    clear_blocker.store(0);
+    clear_blocker.store(1);
   }
 
   inline  TS getGlobalTS() {
@@ -344,11 +353,13 @@ private:
 
     assert((latest + 1) % kMaxFilters != oldest);
     if (!isEmpty())
-      filters[latest - 1].endTS = myClock::get_ts();
+      filters[RING_SUB(latest, 1, kMaxFilters)].endTS = myClock::get_ts();
     // create first skiplist node
     size_t start_offset;
-    buffer->alloc(start_offset);
+    auto skp = buffer->alloc(start_offset);
+    std::fill_n(skp->next_ptrs, kMaxLevel, kKeyMax);
     filters[latest].start_offset = start_offset;
+    filters[latest].my_fliper = fliper.fetch_xor(1);
     latest = RING_ADD(latest, 1, kMaxFilters);
     cutil::write_unlock(mutex_);
   }
@@ -417,7 +428,6 @@ private:
     }
   }
 
-
   static void filter_thread(FilterPool* fp, MonotonicBufferRing<SkipListNode>* buffer) {
     bindCore(filterCore);
     // FilterPool * fp = static_cast<FilterPool *>(args[0]);
@@ -432,7 +442,7 @@ private:
       }
       size_t cur_offset;
       size_t cur_distance = buffer->check_distance(fp->filters[fp->latest].start_offset, cur_offset);
-      if (cur_distance > 35000) {
+      if (cur_distance > kCreateDataRatio * kMaxSkipListData) {
         fp->create(buffer);
       }
       nanosleep(&sleep_time, nullptr); 
@@ -472,6 +482,7 @@ private:
   int latest{0};
   bool no_free{false};
   FilterPoolNode filters[kMaxFilters];
+  std::atomic<uint8_t> fliper{0};
   std::atomic<cutil::ull_t> mutex_;
   std::thread bufferClearer;
   std::thread filterCreator;
@@ -492,7 +503,8 @@ public:
 
   KVCache(size_t cache_size, bool no_fp): cache_size(cache_size), buffer(cache_size), filter_pool(){
     size_t start_offset;
-    buffer.alloc(start_offset);
+    auto skp = buffer.alloc(start_offset);
+    std::fill_n(skp->next_ptrs, kMaxLevel, kKeyMax);
     filter_pool[0].start_offset = start_offset;
   }
 
@@ -511,11 +523,15 @@ public:
     sln->kvts.ts = ts;
     sln->kvts.v = v;
     sln->level = sln_level;
+    std::fill_n(sln->next_ptrs, kMaxLevel, kKeyMax);
     bool filter_is_latest;
     auto filter = filter_pool.get_filter(ts, filter_is_latest);
     if (filter_is_latest) {
+      filter->olc_thread_count.fetch_add(1);
       skiplist_insert_latest(sln, node_offset, filter);
+      filter->olc_thread_count.fetch_sub(1);
     } else {
+      while (filter->olc_thread_count.load() != 0){}
       skiplist_insert(sln, node_offset, filter);
     }
     filter->filter->insert(k);
@@ -525,13 +541,15 @@ public:
   void test_buffer_insert(Key k, TS ts, Value v, bool is_latest) {
     size_t node_offset = 0;
     int sln_level = randomHeight();
+    // printf("random height:%d\n", sln_level);
     auto sln = buffer.alloc(1, node_offset);
     sln->kvts.k = k;
     sln->kvts.ts = ts;
     sln->kvts.v = v;
     sln->level = sln_level;
+    std::fill_n(sln->next_ptrs, kMaxLevel, kKeyMax);
     FilterPoolNode * filter = &filter_pool[0];
-    printf("insert %lu", k);
+    // printf("insert %lu", k);
     if (is_latest) {
       skiplist_insert_latest(sln, node_offset, filter);
     } else {
@@ -551,11 +569,14 @@ public:
     assert(filter_pool[filter_idx].endTS > filter_pool.getGlobalTS());
     auto filter = &filter_pool[filter_idx];
     if (filter_is_latest) {
+      filter->olc_thread_count.fetch_add(1);
       if (skiplist_search_latest(k, v, filter)) {
+        filter->olc_thread_count.fetch_sub(1);
         filter_pool.RunlockGlobalTS();
         return true;
       }
     }
+    while (filter->olc_thread_count.load()!= 0) {}
     while (!skiplist_search(k, v, filter)) {
       filter_idx = filter_pool.contain(k, filter_idx, pre_oldest);
       if (filter_idx == -1) {
@@ -599,20 +620,19 @@ private:
     }
     auto skiplist_head = &buffer[filter->start_offset];
     auto p = skiplist_head;
+    auto next_pos = p->next_ptrs[kMaxLevel-1];
     //search and insert;
     for (int i = kMaxLevel - 1; i >= 0; i--)
     {
-      if (p->next_ptrs[i] == 0) {
-        continue;
-      }
-      auto next_pos = p->next_ptrs[i];
-      while (next_pos != 0 && buffer[next_pos].kvts.k < sln->kvts.k)
+      while (next_pos != kKeyMax && buffer[next_pos].kvts.k < sln->kvts.k)
       {
         p = &buffer[next_pos];
         cur_pos = next_pos;
         next_pos = p->next_ptrs[i];
       } if (i < sln->level) {
         insert_buffer[i] = cur_pos;
+      } if (i > 0) {
+        next_pos = p->next_ptrs[i-1];
       }
     }
     for (int i = 0; i< sln->level;i++) {
@@ -623,10 +643,10 @@ private:
     cutil::write_unlock(filter->skiplist_lock_);
   }
 
-  inline void unlock_previous(size_t start_pos, int start_level, int level) {
+  inline void unlock_previous(size_t start_pos, int start_level, int level, uint8_t fliper) {
     for (int i = start_level; i< level; i++) {
       size_t pos = insert_buffer[i] - start_pos;
-      cutil::write_unlock(Latest_lock_buffer[0][pos][i]);
+      cutil::write_unlock(Latest_lock_buffer[fliper][pos][i]);
     }
   }
 
@@ -636,54 +656,50 @@ private:
   restart:
     bool need_restart = false;
     auto skiplist_head = &buffer[filter->start_offset];
-    auto cur_v = cutil::read_lock_or_restart(Latest_lock_buffer[0][cur_pos - start_pos][kMaxLevel - 1], need_restart);
+    auto cur_v = cutil::read_lock_or_restart(Latest_lock_buffer[filter->my_fliper][cur_pos - start_pos][kMaxLevel - 1], need_restart);
     if (need_restart) {
       goto restart;
     }
     auto p = skiplist_head;
+    auto next_pos = p->next_ptrs[kMaxLevel - 1];
     for (int i = kMaxLevel - 1; i >= 0; i--)
     {
-      auto next_pos = p->next_ptrs[i];
-      while (next_pos != 0 && buffer[next_pos].kvts.k < sln->kvts.k)
+      while (next_pos != kKeyMax && buffer[next_pos].kvts.k < sln->kvts.k)
       {
+        assert(next_pos - start_pos < kMaxSkipListData);
         p = &buffer[next_pos];
-        auto f_v = cutil::read_lock_or_restart(Latest_lock_buffer[0][next_pos - start_pos][i], need_restart);
+        auto f_v = cutil::read_lock_or_restart(Latest_lock_buffer[filter->my_fliper][next_pos - start_pos][i], need_restart);
         if (need_restart) {
-          unlock_previous(start_pos, i + 1, sln->level);
+          unlock_previous(start_pos, i + 1, sln->level, filter->my_fliper);
           goto restart;
         }
-        cutil::read_unlock_or_restart(Latest_lock_buffer[0][cur_pos - start_pos][i], cur_v, need_restart);
+        cutil::read_unlock_or_restart(Latest_lock_buffer[filter->my_fliper][cur_pos - start_pos][i], cur_v, need_restart);
         if (need_restart) {
-          unlock_previous(start_pos, i + 1, sln->level);
+          unlock_previous(start_pos, i + 1, sln->level, filter->my_fliper);
           goto restart;
         }
         cur_pos = next_pos;
         next_pos = p->next_ptrs[i];
         cur_v = f_v;
-      } if (i < sln->level) {
-        cutil::upgrade_to_write_lock_or_restart(Latest_lock_buffer[0][cur_pos - start_pos][i], cur_v, need_restart);
+      } 
+      if (i < sln->level) {
+        cutil::upgrade_to_write_lock_or_restart(Latest_lock_buffer[filter->my_fliper][cur_pos - start_pos][i], cur_v, need_restart);
         if (need_restart) {
-          unlock_previous(start_pos, i+1, sln->level);
+          unlock_previous(start_pos, i+1, sln->level, filter->my_fliper);
           goto restart;
         }
         insert_buffer[i] = cur_pos;
-      } else {
-        cutil::read_unlock_or_restart(Latest_lock_buffer[0][cur_pos - start_pos][i], cur_v, need_restart);
-        if (need_restart) {
-          unlock_previous(start_pos, i + 1, sln->level);
-          goto restart;
-        }
       } if (i > 0) {
         //lock next level
         int sig = int(i >= sln->level);
-        auto f_v = cutil::read_lock_or_restart(Latest_lock_buffer[0][cur_pos - start_pos][i - 1], need_restart);
+        auto f_v = cutil::read_lock_or_restart(Latest_lock_buffer[filter->my_fliper][cur_pos - start_pos][i - 1], need_restart);
         if (need_restart) {
-          unlock_previous(start_pos, i + sig, sln->level);
+          unlock_previous(start_pos, i + sig, sln->level, filter->my_fliper);
           goto restart;
         }
-        cutil::read_unlock_or_restart(Latest_lock_buffer[0][cur_pos - start_pos][i], cur_v, need_restart);
+        cutil::read_unlock_or_restart(Latest_lock_buffer[filter->my_fliper][cur_pos - start_pos][i], cur_v, need_restart);
         if (need_restart) {
-          unlock_previous(start_pos, i + sig, sln->level);
+          unlock_previous(start_pos, i + sig, sln->level, filter->my_fliper);
           goto restart;
         }
         cur_v = f_v;
@@ -691,9 +707,10 @@ private:
       }
     } 
     for (int i = 0; i < sln->level; i++) {
-      auto pre_node = &buffer[cur_pos];
+      auto pre_node = &buffer[insert_buffer[i]];
       sln->next_ptrs[i] = pre_node->next_ptrs[i];
       pre_node->next_ptrs[i] = node_offset;
+      cutil::write_unlock(Latest_lock_buffer[filter->my_fliper][insert_buffer[i]][i]);
     }
   }
 
@@ -707,24 +724,23 @@ private:
     }
     auto skiplist_head = &buffer[filter->start_offset];
     auto p = skiplist_head;
+    auto next_pos = p->next_ptrs[kMaxLevel -1];
     for (int i = kMaxLevel - 1; i >= 0; i--)
     {
-      if (p->next_ptrs[i] == 0) {
-        continue;
-      }
-      auto next_pos = p->next_ptrs[i];
-      while (next_pos != 0 && buffer[next_pos].kvts.k < k)
+      while (next_pos != kKeyMax && buffer[next_pos].kvts.k < k)
       {
         p = &buffer[next_pos];
         next_pos = p->next_ptrs[i];
-      } if (next_pos != 0 && buffer[next_pos].kvts.k == k) {
+      } if (next_pos != kKeyMax && buffer[next_pos].kvts.k == k) {
         v = buffer[next_pos].kvts.v;
         cutil::read_unlock_or_restart(filter->skiplist_lock_, cur_v, need_restart);
         if (need_restart) {
           goto restart;
         }
         return true;
-      } 
+      } if ( i > 0) {
+        next_pos = p->next_ptrs[i-1];
+      }
     }
     cutil::read_unlock_or_restart(filter->skiplist_lock_, cur_v, need_restart);
     if (need_restart) {
@@ -743,46 +759,55 @@ private:
           v = buffer[i].kvts.v;
           return true;
         }
-        return false;
       }
+      return false;
     }
   restart:
     bool need_restart = false;
     auto skiplist_head = &buffer[filter->start_offset];
-    auto cur_v = cutil::read_lock_or_restart(Latest_lock_buffer[0][cur_pos - start_pos][kMaxLevel - 1], need_restart);
+    auto cur_v = cutil::read_lock_or_restart(Latest_lock_buffer[filter->my_fliper][cur_pos - start_pos][kMaxLevel - 1], need_restart);
     if (need_restart) {
       goto restart;
     }
     auto p = skiplist_head;
+    auto next_pos = p->next_ptrs[kMaxLevel - 1];
     for (int i = kMaxLevel - 1; i >= 0; i--)
     {
-      if (p->next_ptrs[i] == 0) {
-        continue;
-      }
-      auto next_pos = p->next_ptrs[i];
-      while (next_pos != 0 && buffer[next_pos].kvts.k < k)
+      while (next_pos != kKeyMax && buffer[next_pos].kvts.k < k)
       {
         p = &buffer[next_pos];
-        auto f_v = cutil::read_lock_or_restart(Latest_lock_buffer[0][next_pos - start_pos][i], need_restart);
+        auto f_v = cutil::read_lock_or_restart(Latest_lock_buffer[filter->my_fliper][next_pos - start_pos][i], need_restart);
         if (need_restart) {
           goto restart;
         }
-        cutil::read_unlock_or_restart(Latest_lock_buffer[0][cur_pos - start_pos][i], cur_v, need_restart);
+        cutil::read_unlock_or_restart(Latest_lock_buffer[filter->my_fliper][cur_pos - start_pos][i], cur_v, need_restart);
         if (need_restart) {
           goto restart;
         }
         cur_pos = next_pos;
         next_pos = p->next_ptrs[i];
         cur_v = f_v;
-      } if (next_pos != 0 && buffer[next_pos].kvts.k == k) {
+      } if (next_pos != kKeyMax && buffer[next_pos].kvts.k == k) {
         v = buffer[next_pos].kvts.v;
-        cutil::read_unlock_or_restart(Latest_lock_buffer[0][cur_pos - start_pos][i], cur_v, need_restart);
+        cutil::read_unlock_or_restart(Latest_lock_buffer[filter->my_fliper][cur_pos - start_pos][i], cur_v, need_restart);
         if (need_restart) {
           goto restart;
         }
         return true;
-      } 
+      } if (i > 0) {
+        auto f_v = cutil::read_lock_or_restart(Latest_lock_buffer[filter->my_fliper][cur_pos - start_pos][i - 1], need_restart);
+        if (need_restart) {
+          goto restart;
+        }
+        cutil::read_unlock_or_restart(Latest_lock_buffer[filter->my_fliper][cur_pos - start_pos][i], cur_v, need_restart);
+        if (need_restart) {
+          goto restart;
+        }
+        cur_v = f_v;
+        next_pos = p->next_ptrs[i - 1]; 
+      }
     }
+    return false;
   }
 
   int randomHeight() {
@@ -791,7 +816,7 @@ private:
   // Increase height with probability 1 in kBranching
     int height = 1;
     while (height < kMaxLevel &&
-          rnd->Next() < (Random::kMaxNext + 1)) {
+          rnd->Next() < (Random::kMaxNext + 1) / 4) {
       height++;
     }
     assert(height > 0);
@@ -801,8 +826,7 @@ private:
 
   size_t cache_size;
   MonotonicBufferRing<SkipListNode> buffer;
-  std::atomic<cutil::ull_t> Latest_lock_buffer[2][65536][kMaxLevel];
-  std::atomic<uint8_t> fliper{0};
+  std::atomic<cutil::ull_t> Latest_lock_buffer[2][kMaxSkipListData][kMaxLevel];
   FilterPool filter_pool;
   static thread_local size_t insert_buffer[kMaxLevel];
 };

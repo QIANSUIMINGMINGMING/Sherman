@@ -139,7 +139,7 @@ private:
 };
 
 inline IndexCache::IndexCache(int cache_size) : cache_size(cache_size) {
-  skiplist = new CacheSkipList(cmp, &alloc, 21);
+  skiplist = new CacheSkipList(cmp, &alloc, 20);
   uint64_t memory_size = define::MB * cache_size;
 
   all_page_cnt = memory_size / sizeof(InternalPage);

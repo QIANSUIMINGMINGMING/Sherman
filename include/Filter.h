@@ -4,8 +4,8 @@
 #include <memory>
 
 // Size of the bloom filter state in bits (2^16).
-constexpr int bloomfilter_store_size = 65536 * 2;
-constexpr int hash_fuction_count = 3;
+constexpr int bloomfilter_store_size = 1310720;
+constexpr int hash_fuction_count = 7;
 
 // thread local hash buffer
 

@@ -1209,6 +1209,57 @@ void Tree::batch_insert(CoroContext *cxt, int coro_id) {
   }
 }
 
+// void Tree::coro_worker(CoroYield &yield, RequstGen *gen, int coro_id) {
+//   CoroContext ctx;
+//   ctx.coro_id = coro_id;
+//   ctx.master = &master;
+//   ctx.yield = &yield;
+
+//   Timer coro_timer;
+//   auto thread_id = dsm->getMyThreadID();
+
+//   while (true) {
+
+//     auto r = gen->next();
+
+//     coro_timer.begin();
+//     timespec timestamp;
+//       if (clock_gettime(CLOCK_REALTIME, &timestamp))
+//           throw 1;
+//       TS ts = (uint64_t)(timestamp.tv_sec * 1000000000) + (uint64_t)(timestamp.tv_nsec);
+//     if (r.is_search) {
+//       CacheHashMap::const_accessor a;
+//       if (ts_table.find(a, r.k)) {
+//         r.v = a->second.v;
+//       } else {
+//         this->search(r.k, r.v, &ctx, coro_id);
+//       }
+//     } else {
+//       CacheHashMap::accessor a;
+//       if (ts_table.find(a, r.k)) {
+//         //get current time
+//         if (ts > a->second.ts) {
+//           a->second.ts = ts;
+//           a->second.v = r.v;
+//         }
+//       } else {
+//         ts_table.insert(std::make_pair(r.k, KVCacheEntry(ts, r.v)));
+//         dsm->post_send();
+//         cur_cache_size.fetch_add(1);
+//         if (cur_cache_size >= cache_size) {
+//           batch_insert(&ctx, coro_id);
+//         }
+//       }
+//       // this->insert(r.k, r.v, &ctx, coro_id);
+//     }
+//     auto us_10 = coro_timer.end() / 100;
+//     if (us_10 >= LATENCY_WINDOWS) {
+//       us_10 = LATENCY_WINDOWS - 1;
+//     }
+//     latency[thread_id][us_10]++;
+//   }
+// }
+
 void Tree::coro_worker(CoroYield &yield, RequstGen *gen, int coro_id) {
   CoroContext ctx;
   ctx.coro_id = coro_id;
@@ -1221,37 +1272,27 @@ void Tree::coro_worker(CoroYield &yield, RequstGen *gen, int coro_id) {
   while (true) {
 
     auto r = gen->next();
+    
+    Key key = 10;
+    Value v1 = 20;
+    Value v2 = 21;
 
     coro_timer.begin();
-    timespec timestamp;
-      if (clock_gettime(CLOCK_REALTIME, &timestamp))
-          throw 1;
-      TS ts = (uint64_t)(timestamp.tv_sec * 1000000000) + (uint64_t)(timestamp.tv_nsec);
+    // if (r.is_search) {
+    //   Value v;
+    //   this->search(r.k, v, &ctx, coro_id);
+    // } else {
+    //   this->insert(r.k, r.v, &ctx, coro_id);
+    // }
+
     if (r.is_search) {
-      CacheHashMap::const_accessor a;
-      if (ts_table.find(a, r.k)) {
-        r.v = a->second.v;
-      } else {
-        this->search(r.k, r.v, &ctx, coro_id);
-      }
+      Value v;
+      this->search(key, v, &ctx, coro_id);
+      assert(v == v1 || v == v2);
     } else {
-      CacheHashMap::accessor a;
-      if (ts_table.find(a, r.k)) {
-        //get current time
-        if (ts > a->second.ts) {
-          a->second.ts = ts;
-          a->second.v = r.v;
-        }
-      } else {
-        ts_table.insert(std::make_pair(r.k, KVCacheEntry(ts, r.v)));
-        dsm->post_send();
-        cur_cache_size.fetch_add(1);
-        if (cur_cache_size >= cache_size) {
-          batch_insert(&ctx, coro_id);
-        }
-      }
-      // this->insert(r.k, r.v, &ctx, coro_id);
+      rand() % 2 == 0 ? this->insert(key, v1, &ctx, coro_id) : this->insert(key, v2, &ctx, coro_id);
     }
+
     auto us_10 = coro_timer.end() / 100;
     if (us_10 >= LATENCY_WINDOWS) {
       us_10 = LATENCY_WINDOWS - 1;

@@ -38,4 +38,10 @@ private:
 
 };
 
+struct RootCache {
+  GlobalAddress g_root_ptr = GlobalAddress::Null();
+  int g_root_level = -1;
+  bool enable_cache;
+};
+
 #endif /* __DIRECTORY_H__ */

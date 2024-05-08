@@ -7,6 +7,8 @@ GlobalAddress g_root_ptr = GlobalAddress::Null();
 int g_root_level = -1;
 bool enable_cache;
 
+RootCache rootCaches[MAX_COMP];
+
 Directory::Directory(DirectoryConnection *dCon, RemoteConnection *remoteInfo,
                      uint32_t machineNR, uint16_t dirID, uint16_t nodeID)
     : dCon(dCon), remoteInfo(remoteInfo), machineNR(machineNR), dirID(dirID),

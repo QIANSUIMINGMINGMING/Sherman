@@ -151,7 +151,7 @@ ibv_mr *createMemoryRegionOnChip(uint64_t mm, size_t mmSize,
   }
 
   /* Device memory registration as memory region */
-  struct ibv_mr *mr = ibv_reg_dm_mr(ctx->pd, dm, 0, mmSize,
+  struct ibv_mr *mr = ibv_reg_dm_mr(ctx->pd, dm, mm, mmSize,
                                     IBV_ACCESS_ZERO_BASED |
                                     IBV_ACCESS_LOCAL_WRITE |
                                         IBV_ACCESS_REMOTE_READ |
