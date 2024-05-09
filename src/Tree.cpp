@@ -1158,8 +1158,11 @@ void Tree::coro_worker(CoroYield &yield, RequstGen *gen, int coro_id) {
     
     Key key = 23826490;
     key = (CityHash64((char *)&key, sizeof(key)) + 1) % (64 * define::MB);
-    Value v1 = 23826490 * 2;
-    Value v2 = 23826490;
+    Value v1 = rand();
+    while (v1 == 0) {
+      v1 = rand();
+    }
+    // Value v2 = 23826490;
 
     coro_timer.begin();
     // if (r.is_search) {
@@ -1172,10 +1175,12 @@ void Tree::coro_worker(CoroYield &yield, RequstGen *gen, int coro_id) {
     if (r.is_search) {
       Value v = kValueNull;
       this->search(key, v, &ctx, coro_id);
-      assert(v == v1 || v == v2 || v == kValueNull);
-      assert(v == v1 || v == v2);
+      // assert(v == v1 || v == v2 || v == kValueNull);
+      // assert(v == v1 || v == v2);
+      assert(v != kValueNull);
     } else {
-      rand() % 2 == 0 ? this->insert(key, v1, &ctx, coro_id) : this->insert(key, v2, &ctx, coro_id);
+      // rand() % 2 == 0 ? this->insert(key, v1, &ctx, coro_id) : this->insert(key, v2, &ctx, coro_id);
+      this->insert(key, v1, &ctx, coro_id);
     }
 
     auto us_10 = coro_timer.end() / 100;
