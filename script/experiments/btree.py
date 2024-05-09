@@ -11,6 +11,9 @@ parameter_grid = ParameterGrid(
 @reg_exp(servers=config.server_list[:NUMBER_NODES])
 def compile(servers):
     servers.cd("/home/muxi/ccpro/Sherman")
+    git_cmd1 = f'git checkout bench'
+    procs = [s.run_cmd(git_cmd1) for s in servers]
+    assert(all(p.wait() == 0 for p in procs))
     git_cmd = f'git pull'
     procs = [s.run_cmd(git_cmd) for s in servers]
     assert(all(p.wait() == 0 for p in procs))
