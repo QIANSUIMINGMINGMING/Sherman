@@ -11,8 +11,11 @@ parameter_grid = ParameterGrid(
 @reg_exp(servers=config.server_list[:NUMBER_NODES])
 def compile(servers):
     servers.cd("/home/muxi/ccpro/Sherman")
-    git_cmd = f'git pull'
-    procs = [s.run_cmd(git_cmd) for s in servers]
+    git_cmd1 = f'git checkout bench'
+    procs = [s.run_cmd(git_cmd1) for s in servers]
+    assert(all(p.wait() == 0 for p in procs))
+    git_cmd2 = f'git pull'
+    procs = [s.run_cmd(git_cmd2) for s in servers]
     assert(all(p.wait() == 0 for p in procs))
     cmake_cmd = f'rm -rf build && mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=DEBUG -DCMAKE_C_COMPILER=/bin/x86_64-linux-gnu-gcc-9 -DCMAKE_CXX_COMPILER=/bin/x86_64-linux-gnu-g++-9 .. && make -j'
     procs = [s.run_cmd(cmake_cmd) for s in servers]
