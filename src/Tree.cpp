@@ -1156,10 +1156,10 @@ void Tree::coro_worker(CoroYield &yield, RequstGen *gen, int coro_id) {
 
     auto r = gen->next();
     
-    Key key = 10;
+    Key key = 23826490;
     key = (CityHash64((char *)&key, sizeof(key)) + 1) % (64 * define::MB);
-    Value v1 = 20;
-    Value v2 = 21;
+    Value v1 = 23826490 * 2;
+    Value v2 = 23826490;
 
     coro_timer.begin();
     // if (r.is_search) {
