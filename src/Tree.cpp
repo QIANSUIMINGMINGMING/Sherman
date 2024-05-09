@@ -1170,7 +1170,7 @@ void Tree::coro_worker(CoroYield &yield, RequstGen *gen, int coro_id) {
     // }
 
     if (r.is_search) {
-      Value v;
+      Value v = kValueNull;
       this->search(key, v, &ctx, coro_id);
       assert(v == v1 || v == v2 || v == kValueNull);
       assert(v == v1 || v == v2);
