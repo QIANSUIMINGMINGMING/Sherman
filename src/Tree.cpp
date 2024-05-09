@@ -1172,12 +1172,8 @@ void Tree::coro_worker(CoroYield &yield, RequstGen *gen, int coro_id) {
     if (r.is_search) {
       Value v = kValueNull;
       this->search(key, v, &ctx, coro_id);
-      if (v != kValueNull) {
-        printf("search %ld %ld\n", key, v);
-        assert(v == v1 || v == v2);
-      }
-      // assert(v == v1 || v == v2 || v == kValueNull);
-      // assert(v == v1 || v == v2);
+      assert(v == v1 || v == v2 || v == kValueNull);
+      assert(v == v1 || v == v2);
     } else {
       rand() % 2 == 0 ? this->insert(key, v1, &ctx, coro_id) : this->insert(key, v2, &ctx, coro_id);
     }
