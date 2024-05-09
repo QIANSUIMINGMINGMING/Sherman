@@ -1157,6 +1157,7 @@ void Tree::coro_worker(CoroYield &yield, RequstGen *gen, int coro_id) {
     auto r = gen->next();
     
     Key key = 10;
+    key = (CityHash64((char *)&key, sizeof(key)) + 1) % 64 * define::MB;
     Value v1 = 20;
     Value v2 = 21;
 
