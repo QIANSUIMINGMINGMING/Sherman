@@ -1272,28 +1272,14 @@ void Tree::coro_worker(CoroYield &yield, RequstGen *gen, int coro_id) {
   while (true) {
 
     auto r = gen->next();
-    
-    Key key = 10;
-    Value v1 = 20;
-    Value v2 = 21;
 
     coro_timer.begin();
-    // if (r.is_search) {
-    //   Value v;
-    //   this->search(r.k, v, &ctx, coro_id);
-    // } else {
-    //   this->insert(r.k, r.v, &ctx, coro_id);
-    // }
-
     if (r.is_search) {
       Value v;
-      this->search(key, v, &ctx, coro_id);
-      assert(v == v1 || v == v2 || v == kValueNull);
-      assert(v == v1 || v == v2);
+      this->search(r.k, v, &ctx, coro_id);
     } else {
-      rand() % 2 == 0 ? this->insert(key, v1, &ctx, coro_id) : this->insert(key, v2, &ctx, coro_id);
+      this->insert(r.k, r.v, &ctx, coro_id);
     }
-
     auto us_10 = coro_timer.end() / 100;
     if (us_10 >= LATENCY_WINDOWS) {
       us_10 = LATENCY_WINDOWS - 1;
