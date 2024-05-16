@@ -3,3 +3,5 @@ build/*
 .vscode/
 *.pyc
 .distexprunner
+*.png
+draw.py
