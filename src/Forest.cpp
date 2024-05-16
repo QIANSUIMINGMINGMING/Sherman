@@ -89,7 +89,7 @@ void BForest::batch_insert(KVTS *kvs, int cnt, CoroContext *cxt,
 
   //buffer statement
   BInternalPage * page;
-  BHeader *header;
+  BHeader *pheader;
 
   int j = 0;
   while (j < cnt - 1) {
