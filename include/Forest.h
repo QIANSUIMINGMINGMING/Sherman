@@ -69,15 +69,10 @@ public:
 
 class BLeafEntry {
 public:
-  // TODO: modify to checksum later
-  uint8_t f_version : 4;
   Key key;
   Value value;
-  uint8_t r_version : 4;
 
   BLeafEntry() {
-    f_version = 0;
-    r_version = 0;
     value = kValueNull;
     key = 0;
   }
@@ -148,6 +143,13 @@ public:
 
 } __attribute__((packed));
 
+enum class BatchInsertFlag {
+  LEFT_SAME_PAGE,
+  LEFT_DIFF_PAGE,
+  RIGHT_SAME_PAGE,
+  RIGHT_DIFF_PAGE
+};
+
 
 class BForest {
 
@@ -169,36 +171,38 @@ private:
   std::atomic<int> cur_cache_sizes[MAX_COMP];
   GlobalAddress allocator_starts[MAX_MEMORY];
 
-  BInternalPage stack_page_buffer[define::kMaxLevelOfTree];
-  
+  constexpr static int kMaxHoldPages = 5;
 
-  // thread_local static stack
-
-  // struct node_meta {
-  //   BHeader hdr;
-  //   int start;
-  //   int end
-  // };
-  
-  boost::unordered_map<GlobalAddress, int> tree_meta;
-  struct internal_split_page {
-    GlobalAddress ptr;
-    InternalPage *new_pages;
-    int num;
+  struct internal_modify_buffer_element {
+    BInternalPage * page[kMaxHoldPages];
+    int start;
+    bool modified;
+    int split_num = 1;
+    int level;
+    std::atomic<int> num;
+    std::atomic<int> hold_thread{-1};
   };
 
-  struct leaf_split_page {
-    
-  };
+  thread_local static BInternalPage * stack_page_buffer[define::kMaxLevelOfTree];
+  thread_local static GlobalAddress stack_page_addr_buffer[define::kMaxLevelOfTree];
+  
+  boost::unordered_map<uint64_t, std::atomic<int>> tree_meta;
+  boost::unordered_map<uint64_t, internal_modify_buffer_element> internal_modify_meta;
 
 private:
   GlobalAddress get_root_ptr_ptr(uint16_t id); 
   GlobalAddress get_root_ptr(CoroContext *cxt, int coro_id, uint16_t id);
 
-  void set_stack_buffer(int level, const Key &k);
+  void set_stack_buffer(int level, const Key &k, CoroContext *cxt, int coro_id);
+  void search_stack_buffer(int level, const Key &k, GlobalAddress & result);
 
-  void set_leaf(BLeafPage *page, const Key &k, const Value &v, bool & need_split);
-  void set_internal(BInternalPage *page, const Key &k, GlobalAddress v, bool & need_split);
+  void split_leaf(KVTS *kvs, int start, int num, BatchInsertFlag l_flag, BatchInsertFlag r_flag, CoroContext *cxt= nullptr, int coro_id = 0);
+  inline void go_in_leaf(BLeafPage *lp, int start, Key lowest, Key highest, int &next);
+
+  void split_internal();
+
+  void set_leaf(BLeafPage *page, GlobalAddress addr, const Key &k, const Value &v, bool & need_split);
+  void set_internal(BInternalPage *page, GlobalAddress addr, const Key &k, GlobalAddress v, bool & need_split);
 
   bool page_search(GlobalAddress page_addr, const Key &k, BSearchResult &result, Key expect_lowest, Key expect_highest, uint8_t expect_level, 
                    CoroContext *cxt, int coro_id, bool from_cache = false);

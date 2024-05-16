@@ -1277,8 +1277,9 @@ void Tree::coro_worker(CoroYield &yield, RequstGen *gen, int coro_id) {
     if (r.is_search) {
       Value v;
       this->search(r.k, v, &ctx, coro_id);
-    } else {
-      this->insert(r.k, r.v, &ctx, coro_id);
+    } else { 
+      if (rand() % 5 == 0) 
+        this->insert(r.k, r.v, &ctx, coro_id);
     }
     auto us_10 = coro_timer.end() / 100;
     if (us_10 >= LATENCY_WINDOWS) {

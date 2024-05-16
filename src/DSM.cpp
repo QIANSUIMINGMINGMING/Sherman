@@ -83,6 +83,7 @@ void DSM::registerThread() {
   for (int i = 0; i < define::kMaxCoro; ++i) {
     rbuf[i].set_buffer(rdma_buffer + i * define::kPerCoroRdmaBuf);
   }
+  assert(define::kMaxCoro * define::kPerCoroRdmaBuf < 12 * define::MB);
 }
 
 void DSM::initRDMAConnection() {
