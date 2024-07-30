@@ -14,6 +14,7 @@ private:
   static const int kPageBufferCnt = 8;    // async, buffer safty
   static const int kSiblingBufferCnt = 8; // async, buffer safty
   static const int kCasBufferCnt = 8;     // async, buffer safty
+  static const int kNextLevelBufferCnt = 8;
   // static const int kBatchPageBufferCnt = 99;
   // static const int k
 
@@ -27,12 +28,14 @@ private:
   char *entry_buffer;
   char *stack_page_buffer;
   char *split_page_buffer;
+  char *next_level_page_buffer;
 
   int page_buffer_cur;
   int sibling_buffer_cur;
   int cas_buffer_cur;
   int stack_page_buffer_cur[define::kMaxLevelOfTree];
   int split_page_buffer_cur;
+  int next_level_page_buffer_cur;
 
   int kPageSize;
 
@@ -45,6 +48,7 @@ public:
     cas_buffer_cur = 0;
     memset(stack_page_buffer, 0, sizeof(int) * define::kMaxLevelOfTree);
     split_page_buffer_cur = 0;
+    next_level_page_buffer_cur = 0;
   }
 
   RdmaBuffer() = default;
@@ -64,11 +68,16 @@ public:
     // page_buffer = (char *)zero_64bit + sizeof(uint64_t);
     page_buffer = (char *) split_page_buffer + kPageSize * kSplitPageBufferCnt;
     sibling_buffer = (char *)page_buffer + kPageSize * kPageBufferCnt;
-    entry_buffer = (char *)sibling_buffer + kPageSize * kSiblingBufferCnt;
+    next_level_page_buffer = (char *)sibling_buffer + kPageSize * kSiblingBufferCnt; 
+    entry_buffer = (char *)next_level_page_buffer + kPageSize * kNextLevelBufferCnt;
     *zero_64bit = 0;
 
     // assert((char *)zero_64bit + 8 - buffer < define::kPerCoroRdmaBuf);
     assert(entry_buffer - buffer < define::kPerCoroRdmaBuf );
+  }
+  char * get_next_level_buffer() {
+    next_level_page_buffer_cur = (next_level_page_buffer_cur + 1) % kNextLevelBufferCnt;
+    return next_level_page_buffer + next_level_page_buffer_cur * kPageSize;
   }
 
   uint64_t *get_cas_buffer() {
@@ -87,7 +96,7 @@ public:
   }
 
   char *get_split_page_buffer(int n) {
-    assert(n <= define::kMaxLeafSplit);
+    assert(n <= (int)define::kMaxLeafSplit);
     split_page_buffer_cur = (split_page_buffer_cur + n) % kSplitPageBufferCnt;
     return split_page_buffer + kPageSize * split_page_buffer_cur;
   }

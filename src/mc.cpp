@@ -3,6 +3,19 @@
 namespace rdmacm {
 namespace multicast {
 
+std::set<Gpsn> packages;
+uint64_t check_package_loss(uint64_t psn_num) {
+    uint64_t loss_packages = 0;
+    for (uint64_t i = 0; i < FLAGS_computeNodes; i++) {
+        for (uint64_t j = 0; j < psn_num; j++) {
+            if(packages.find(std::make_pair(i, j)) == packages.end()) {
+                loss_packages++;
+            }
+        }
+    }
+    return loss_packages;
+}
+
 struct rdma_event_channel *create_first_event_channel() {
     struct rdma_event_channel *channel;
 
@@ -49,7 +62,7 @@ int verify_port(struct multicast_node * node) {
     return 0;
 } 
 
-multicastCM::multicastCM(): mcIp(FLAGS_mcIp), mcGroups(FLAGS_mcGroups), isSender(FLAGS_mcIsSender), mbr(FLAGS_dramGB * FLAGS_rdmaMemoryFactor * 1024 * 1024 * 1024) {
+multicastCM::multicastCM(): mcIp(FLAGS_mcIp), mcGroups(FLAGS_computeNodes), mbr(FLAGS_dramGB * FLAGS_rdmaMemoryFactor * 1024 * 1024 * 1024) {
     for (int i = 0; i < kMaxRpcCoreNum; i++) {
         pageQueues[i] = new moodycamel::BlockingReaderWriterCircularBuffer<TransferObj *>(kMcMaxPostList);  
     } 
@@ -211,16 +224,14 @@ void multicastCM::destroy_node(struct multicast_node *node) {
     rdma_destroy_event_channel(node->channel);
 } 
 
-int multicastCM::create_message(struct multicast_node *node, int message_size, int message_count) {
-    if (!message_size)
-        message_count = 0;
-
+int multicastCM::create_message(struct multicast_node *node, int message_count) {
     if (!message_count)
         return 0;
 
-    node->messages = (uint8_t *)mbr.allocate(message_size * message_count);
+    node->send_messages = (uint8_t *)mbr.allocate(kMcPageSize * message_count);
+    node->recv_messages = (uint8_t *)mbr.allocate(kRecvMcPageSize * message_count);
     // post initial recvs
-    post_recvs(node);
+    init_recvs(node);
 
     //init send wrs
     for (int i = 0; i < kMcMaxPostList; i++) {
@@ -228,8 +239,6 @@ int multicastCM::create_message(struct multicast_node *node, int message_size, i
         node->send_wr[i].sg_list = &node->send_sgl[i];
         node->send_wr[i].num_sge = 1;
         node->send_wr[i].opcode = IBV_WR_SEND;
-        if (i % kpostlist == 0 && i > 0)
-            node->send_wr[i].send_flags = IBV_SEND_SIGNALED;
         node->send_wr[i].wr_id = (uint64_t) node;
         node->send_wr[i].wr.ud.ah = node->ah;
         node->send_wr[i].wr.ud.remote_qkey = node->remote_qkey;
@@ -237,8 +246,9 @@ int multicastCM::create_message(struct multicast_node *node, int message_size, i
 
         node->send_sgl[i].length = kMcPageSize;
         node->send_sgl[i].lkey = mr->lkey;
-        node->send_sgl[i].addr = 0;
+        node->send_sgl[i].addr = (uintptr_t)node->send_messages + i * kMcPageSize;
     }
+
     return 0;
 }
 
@@ -276,9 +286,11 @@ int multicastCM::poll_cqs(int connections, int message_count, enum SR sr) {
 void multicastCM::handle_recv(struct multicast_node *node, int id) {
 #if defined(SINGLE_KEY)
 #elif defined(KEY_PAGE)
-    uint8_t * message = node->messages + id * sizeof(kMcPageSize) + 40; //ud padding
+    uint8_t * message = node->recv_messages + id * sizeof(kMcPageSize) + 40; //ud padding
     TransferObj *page = reinterpret_cast<TransferObj *>(message);
-    assert(pageQueues[node->id]->try_enqueue(page));
+    // record psn
+    packages.emplace(std::make_pair(page->node_id, page->psn));
+    // assert(pageQueues[node->id]->try_enqueue(page));
 #elif defined(FILTER_PAGE)
 #else 
     assert(false);
@@ -320,12 +332,6 @@ int multicastCM::addr_handler(struct multicast_node *node) {
     if (ret)
         return ret;
 
-    if (!isSender) {
-        ret = post_recvs(node);
-        if (ret)
-            return ret;
-    }
-
     mc_attr.comp_mask =
         RDMA_CM_JOIN_MC_ATTR_ADDRESS | RDMA_CM_JOIN_MC_ATTR_JOIN_FLAGS;
     mc_attr.addr = node->dst_addr;
@@ -359,6 +365,29 @@ int multicastCM::join_handler(struct multicast_node *node, struct rdma_ud_param 
     return 0;
 }
 
+int multicastCM::init_recvs(struct multicast_node * node) {
+    int ret;
+    for (int i = 0; i < kMcMaxPostList; i++) {
+        memset(&node->recv_wr[i], 0, sizeof(node->recv_wr[i]));
+        node->recv_wr[i].next = i == kMcMaxPostList - 1 ? nullptr : &node->recv_wr[i+1];
+        node->recv_wr[i].sg_list = &node->recv_sgl[i];
+        node->recv_wr[i].num_sge = 1;
+        node->recv_wr[i].wr_id = (uintptr_t) node;
+
+        memset(&node->recv_sgl[i], 0, sizeof(node->recv_sgl[i]));
+        node->recv_sgl[i].length = kRecvMcPageSize;
+        node->recv_sgl[i].lkey = mr->lkey;
+        node->recv_sgl[i].addr = (uintptr_t) node->recv_messages + i * kRecvMcPageSize;
+    }
+
+    struct ibv_recv_wr *bad_recv_wr;
+    ret = ibv_post_recv(node->cma_id->qp, &node->recv_wr[0], &bad_recv_wr);
+    if (ret) {
+        printf("failed to post receives: %d\n", ret);
+    }
+    return ret;
+}
+
 //test functions
 int multicastCM::post_recvs(struct multicast_node *node) {
     struct ibv_recv_wr recv_wr, *recv_failure;
@@ -366,7 +395,6 @@ int multicastCM::post_recvs(struct multicast_node *node) {
     int i, ret = 0;
 
     int message_count = kMcMaxPostList;
-    int message_size = kMcPageSize;
 
     if (!message_count)
         return 0;
@@ -376,9 +404,9 @@ int multicastCM::post_recvs(struct multicast_node *node) {
     recv_wr.num_sge = 1;
     recv_wr.wr_id = (uintptr_t) node;
 
-    sge.length = message_size + sizeof(struct ibv_grh);
+    sge.length = kRecvMcPageSize;
     sge.lkey = mr->lkey; 
-    sge.addr = (uintptr_t) node->messages;
+    sge.addr = (uintptr_t) node->recv_messages;
 
     for (i = 0; i < message_count && !ret; i++ ) {
         ret = ibv_post_recv(node->cma_id->qp, &recv_wr, &recv_failure);
@@ -407,12 +435,11 @@ int multicastCM::post_sends(struct multicast_node *node, int signal_flag) {
     send_wr.wr.ud.remote_qpn = node->remote_qpn;
     send_wr.wr.ud.remote_qkey = node->remote_qkey;
 
-    int message_size = kMcPageSize;
     int message_count = kMcMaxPostList;
 
-    sge.length = message_size;
+    sge.length = kMcPageSize;
     sge.lkey = mr->lkey;
-    sge.addr = (uintptr_t) node->messages;
+    sge.addr = (uintptr_t) node->send_messages;
 
     for (i = 0; i < message_count && !ret; i++) {
         ret = ibv_post_send(node->cma_id->qp, &send_wr, &bad_send_wr);
@@ -422,21 +449,23 @@ int multicastCM::post_sends(struct multicast_node *node, int signal_flag) {
     return ret;
 }
 
-
-void multicastCM::send_message(struct multicast_node *node, uint8_t * message) {
-    if (node->send_pos % kpostlist == 0 && node->send_pos > 0) {
-        ibv_wc wc;
-        ibv_poll_cq(node->send_cq, 1, &wc);
-        assert(wc.status == IBV_WC_SUCCESS);
-    }
-    struct ibv_send_wr *bad_send_wr;
-    ibv_send_wr *send_wr = &node->send_wr[node->send_pos % kMcMaxPostList];
-    ibv_sge *sge = &node->send_sgl[node->send_pos % kMcMaxPostList];
-    
-    sge->addr = (uint64_t)message;
-    assert(!ibv_post_send(node->cma_id->qp, send_wr, &bad_send_wr));
-    node->send_pos += 1;
+int multicastCM::get_pos(int tid, TransferObj *& next_message_address) {
+    struct multicast_node *node = &nodes[tid];
+    int pos = node->send_pos;
+    node->send_pos = RING_ADD(node->send_pos, 1, kMcMaxPostList);
+    next_message_address = (TransferObj*)(node->send_messages + node->send_pos * kMcPageSize);
+    return pos;
 }
+
+void multicastCM::send_message(int tid, int pos) {
+    struct multicast_node *node = &nodes[tid];
+    struct ibv_send_wr *bad_send_wr;
+    ibv_send_wr *send_wr = &node->send_wr[pos];
+    ibv_sge *sge = &node->send_sgl[pos];
+    sge->addr = (uint64_t)node->send_messages + pos * kMcPageSize;
+    assert(!ibv_post_send(node->cma_id->qp, send_wr, &bad_send_wr));
+}
+
 
 int multicastCM::resolve_nodes() {
     int i, ret;
@@ -452,11 +481,13 @@ int multicastCM::resolve_nodes() {
 }
 
 void *multicastCM::cma_thread_worker(void *arg) {
+
     bindCore(mcCmaCore);
     struct rdma_cm_event *event;
     int ret;
 
     struct multicast_node *node = static_cast<multicast_node *>(arg);
+    printf("mckey: worker %d, bind core is %d\n ", node->id, mcCmaCore);
     while (1) {
         ret = rdma_get_cm_event(node->channel, &event);
         if (ret) {
@@ -483,6 +514,8 @@ void *multicastCM::cma_thread_worker(void *arg) {
 void *multicastCM::mc_maintainer(uint16_t id, multicastCM *me) {
     // int id = (*(static_cast<int16_t *>(args[0])));
     bindCore(rpcCore - id);
+    printf("mckey: maintainer %d, using core %d\n", id, rpcCore - id);
+
     // multicastCM *me = static_cast<multicastCM *>(args[1]);
     multicast_node *node = &me->nodes[id];
     struct ibv_wc wc_buffer[kMcMaxPostList];
@@ -491,6 +524,10 @@ void *multicastCM::mc_maintainer(uint16_t id, multicastCM *me) {
     int empty_start_pos = 0;
     int recv_handle_pos = 0;
     int empty_recv_num = 0;
+
+    while (!node->connected) {
+        sleep(1);
+    }
 
     while (true) {
         int num_comps = ibv_poll_cq(node->recv_cq, kpostlist, wc_buffer);
@@ -513,11 +550,9 @@ void *multicastCM::mc_maintainer(uint16_t id, multicastCM *me) {
         if (empty_recv_num >= kpostlist) {
             for (int w_i = 0; w_i < empty_recv_num; w_i ++) {
                 int pos = RING_ADD(empty_start_pos, w_i, kMcMaxPostList);
-                node->recv_sgl[pos].length = kMcPageSize;
-                node->recv_sgl[pos].lkey = me->mr->lkey;
-                node->recv_sgl[pos].addr = (uintptr_t) node->messages + pos * kMcPageSize;
+                node->recv_sgl[pos].length = kRecvMcPageSize;
+                node->recv_sgl[pos].addr = (uintptr_t) node->recv_messages + pos * kRecvMcPageSize;
                 node->recv_wr[pos].sg_list = &node->recv_sgl[pos];
-                node->recv_wr[pos].num_sge = 1;
                 node->recv_wr[pos].next = w_i == empty_recv_num - 1 ? nullptr : &node->recv_wr[RING_ADD(pos, 1, kMcMaxPostList)];
             }
             int ret = ibv_post_recv(node->cma_id->qp, &node->recv_wr[empty_start_pos], &bad_recv_wr);
@@ -531,6 +566,7 @@ void *multicastCM::cma_thread_manager(void *arg) {
     bindCore(mcCmaCore);
     multicastCM *mckey = static_cast<multicastCM *>(arg);
     pthread_t workers[mckey->getGroupSize()];
+    printf("mckey: manager, using core %d, there are %d workers \n", mcCmaCore, mckey->getGroupSize());
 
     for (int i = 0; i < mckey->getGroupSize(); i++) {
         // create worker threads for each group
@@ -583,7 +619,7 @@ int multicastCM::test_node() {
     // sleep(5);
 
     if (message_count) {
-        if (isSender) {
+        if (FLAGS_mcIsSender) {
             printf("initiating data transfers\n");
             for (i = 0; i < mcGroups; i++) {
                 ret = post_sends(&nodes[i], 0);
@@ -606,5 +642,5 @@ int multicastCM::test_node() {
     return 0;
 }
 
-} // namespace multicast
+}// namespace multicast
 } // namespace rdmacm

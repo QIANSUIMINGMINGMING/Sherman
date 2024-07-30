@@ -13,16 +13,27 @@
 #include <thread>
 #include <rdma/rdma_cma.h>
 #include <infiniband/ib.h>
+#include <unordered_map>
+#include <vector>
 
 #include "memManager.h"
 #include "flags.h"
 #include "Common.h"
 #include "KVCache.h"
-#include "McPage.h"
 #include "third_party/readerwritercircularbuffer.h"
 
 namespace rdmacm {
 namespace multicast {
+
+constexpr int kMcCardinality =
+    (kMcPageSize - sizeof(int) - sizeof(int)) /
+    sizeof(KVTS);
+
+struct TransferObj {
+    int psn{-1};
+    int node_id;
+    KVTS elements[kMcCardinality];
+};
 
 struct multicast_node {
     int id;
@@ -39,7 +50,8 @@ struct multicast_node {
 
     uint32_t remote_qpn;
     uint32_t remote_qkey;
-    uint8_t * messages;
+    uint8_t * send_messages;
+    uint8_t * recv_messages;
     struct ibv_recv_wr recv_wr[kMcMaxPostList];
     struct ibv_sge recv_sgl[kMcMaxPostList];
     struct ibv_send_wr send_wr[kMcMaxPostList];
@@ -53,6 +65,10 @@ int verify_port(struct multicast_node *node);
 
 enum SR {SEND, RECV};
 
+// package loss
+typedef std::pair<uint64_t, uint64_t> Gpsn; // <nodeid, psn>
+uint64_t check_package_loss(uint64_t psn_num);
+
 class multicastCM {
 public:
 	multicastCM();
@@ -62,10 +78,14 @@ public:
     int getGroupSize(){return mcGroups;}
     struct multicast_node *getNode(int i) {return &nodes[i];}
     moodycamel::BlockingReaderWriterCircularBuffer<TransferObj *> *getPageQueue(int i) {return pageQueues[i];}
+    void send_message(int tid, int pos);
+    int get_pos(int tid, TransferObj *&message_address);
+    void print_self() { 
+    }
 
 private:
     int init_node(struct multicast_node *node);
-    int create_message(struct multicast_node *node, int message_size = kMcPageSize, int message_count = kMcMaxPostList);
+    int create_message(struct multicast_node *node, int message_count = kMcMaxPostList);
     void destroy_node(struct multicast_node *node); 
     int alloc_nodes (int connections);
 
@@ -75,7 +95,7 @@ private:
     int post_recvs(struct multicast_node *node);
     int post_sends(struct multicast_node *node, int signal_flag);
 
-    void send_message(multicast_node *node, uint8_t *message);
+    // void send_message(multicast_node *node, uint8_t *message);
 
     void handle_recv(struct multicast_node *node, int id);
 
@@ -83,11 +103,14 @@ private:
 	int addr_handler(struct multicast_node *node);
     int join_handler(struct multicast_node *node, struct rdma_ud_param *param);
 
+    int init_recvs(struct multicast_node *node);
+
     int connect_events(struct multicast_node *node);
     int resolve_nodes();
 
     static void *cma_thread_worker(void *arg);
     static void *cma_thread_manager(void *arg);
+    static void *psn_checker(void *arg);
 
     static void *mc_maintainer(uint16_t id, multicastCM *me);
 
@@ -104,8 +127,6 @@ private:
 	int mcGroups;
     struct ibv_mr *mr;
     struct ibv_pd *pd;
-
-    bool isSender;
     utils::SynchronizedMonotonicBufferRessource mbr; 
 };
 

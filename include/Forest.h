@@ -9,23 +9,22 @@
 #include "Directory.h"
 
 #include <boost/unordered/unordered_map.hpp>
+#include <boost/unordered/concurrent_flat_map.hpp>
+
 
 namespace forest {
 
 struct BSearchResult {
   bool is_leaf;
   uint8_t level;
-  GlobalAddress slibing;
   GlobalAddress next_level;
   Value val;
-  bool corrupted = false;
 };
 
 class BHeader {
 private:
-  GlobalAddress parent_ptr;
   GlobalAddress leftmost_ptr;
-  GlobalAddress sibling_ptr;
+  GlobalAddress parent_ptr;
   uint8_t level;
   int16_t last_index;
   Key lowest;
@@ -40,15 +39,22 @@ private:
 public:
   BHeader() {
     leftmost_ptr = GlobalAddress::Null();
-    sibling_ptr = GlobalAddress::Null();
+    parent_ptr = GlobalAddress::Null();
     last_index = -1;
     lowest = kKeyMin;
     highest = kKeyMax;
   }
 
+  BHeader(BHeader &hdr) {
+    leftmost_ptr = hdr.leftmost_ptr;
+    parent_ptr = hdr.parent_ptr;
+    lowest = hdr.lowest;
+    highest = hdr.highest;
+  }
+
   void debug() const {
     std::cout << "leftmost=" << leftmost_ptr << ", "
-              << "sibling=" << sibling_ptr << ", "
+              // << "sibling=" << sibling_ptr << ", "
               << "level=" << (int)level << ","
               << "cnt=" << last_index + 1 << ","
               << "range=[" << lowest << " - " << highest << "]";
@@ -86,8 +92,11 @@ constexpr int kBLeafCardinality =
 
 class BInternalPage {
 private:
+  uint32_t crc;
+  uint8_t front_version;
   BHeader hdr;
-  BInternalEntry records[kInternalCardinality];
+  BInternalEntry records[kBInternalCardinality];
+  uint8_t rear_version;
 
   friend class BForest;
   friend class IndexCache;
@@ -109,6 +118,21 @@ public:
     hdr.level = level;
     records[0].ptr = GlobalAddress::Null();
   }
+
+  void set_consistent() {
+    this->crc =
+        CityHash32((char *)&front_version, (&rear_version) - (&front_version));
+  }
+
+  bool check_consistent() const {
+
+    bool succ = true;
+    auto cal_crc =
+        CityHash32((char *)&front_version, (&rear_version) - (&front_version));
+    succ = cal_crc == this->crc;
+    return succ;
+  }
+
   void debug() const {
     std::cout << "InternalPage@ ";
     hdr.debug();
@@ -126,14 +150,31 @@ public:
 
 class BLeafPage {
 private:
+  uint32_t crc;
+  uint8_t front_version;
   BHeader hdr;
-  BLeafEntry records[kLeafCardinality];
+  BLeafEntry records[kBLeafCardinality];
+  uint8_t rear_version;
 
   friend class BForest;
 public:
   BLeafPage(uint32_t level = 0) {
     hdr.level = level;
     records[0].value = kValueNull;
+  }
+
+  void set_consistent() {
+    this->crc =
+        CityHash32((char *)&front_version, (&rear_version) - (&front_version));
+  }
+
+  bool check_consistent() const {
+
+    bool succ = true;
+    auto cal_crc =
+        CityHash32((char *)&front_version, (&rear_version) - (&front_version));
+    succ = cal_crc == this->crc;
+    return succ;
   }
 
   void debug() const {
@@ -150,6 +191,10 @@ enum class BatchInsertFlag {
   RIGHT_DIFF_PAGE
 };
 
+struct BInsertedEntry {
+  BInternalEntry entry;
+  GlobalAddress page_addr;
+};
 
 class BForest {
 
@@ -158,9 +203,7 @@ public:
 
   bool search(const Key &k, Value &v, CoroContext *cxt = nullptr, int coro_id = 0);
 
-  void batch_insert(KVTS *kvs, int cnt, CoroContext *cxt = nullptr,
-                    int coro_id = 0);
-
+  void batch_insert(KVTS *kvs, int full_number, int thread_num);
 private:
   DSM *dsm;
   int tree_num;
@@ -171,41 +214,41 @@ private:
   std::atomic<int> cur_cache_sizes[MAX_COMP];
   GlobalAddress allocator_starts[MAX_MEMORY];
 
-  constexpr static int kMaxHoldPages = 5;
-
-  struct internal_modify_buffer_element {
-    BInternalPage * page[kMaxHoldPages];
-    int start;
-    bool modified;
-    int split_num = 1;
-    int level;
-    std::atomic<int> num;
-    std::atomic<int> hold_thread{-1};
-  };
-
-  thread_local static BInternalPage * stack_page_buffer[define::kMaxLevelOfTree];
+  thread_local static uintptr_t stack_page_buffer[define::kMaxLevelOfTree];
   thread_local static GlobalAddress stack_page_addr_buffer[define::kMaxLevelOfTree];
   
-  boost::unordered_map<uint64_t, std::atomic<int>> tree_meta;
-  boost::unordered_map<uint64_t, internal_modify_buffer_element> internal_modify_meta;
+  // boost::unordered_map<uint64_t, std::atomic<int>> tree_meta;
+  boost::concurrent_flat_map<uint64_t, int> tree_meta; 
+  // new level
+  GlobalAddress next_level_page_addr;
+  BInternalPage * next_level_page;
+
+  boost::concurrent_flat_map<uint64_t, std::vector<BInternalEntry>> new_inserted_entries[define::kMaxLevelOfTree];
+  std::unordered_map<uint64_t, BHeader> new_inserted_headers;
+  std::thread batch_insert_threads[kMaxBatchInsertCoreNum];
 
 private:
+  static void batch_insert_leaf(BForest *forest , KVTS *kvs, int start, int cnt, int full_number, int thread_id, CoroContext *cxt = nullptr,
+                    int coro_id = 0);
+  void batch_insert_internal(int thread_num);
+
   GlobalAddress get_root_ptr_ptr(uint16_t id); 
   GlobalAddress get_root_ptr(CoroContext *cxt, int coro_id, uint16_t id);
 
   void set_stack_buffer(int level, const Key &k, CoroContext *cxt, int coro_id);
   void search_stack_buffer(int level, const Key &k, GlobalAddress & result);
 
-  void split_leaf(KVTS *kvs, int start, int num, BatchInsertFlag l_flag, BatchInsertFlag r_flag, CoroContext *cxt= nullptr, int coro_id = 0);
+  void split_leaf(KVTS *kvs, int start, int split_num, int range, BatchInsertFlag l_flag, BatchInsertFlag r_flag, int thread_id, CoroContext *cxt= nullptr, int coro_id = 0);
   inline void go_in_leaf(BLeafPage *lp, int start, Key lowest, Key highest, int &next);
+  inline void go_in_kvts(KVTS *kvs, int start, int range, int &next);
+  void calculate_meta(int split_num, BatchInsertFlag l_flag);
 
-  void split_internal();
+  inline void set_leaf(KVTS *kvs, const Key &k, const Value &v, bool & need_split,BatchInsertFlag l_flag, BatchInsertFlag r_flag, int pre_kv, int pro_kv, CoroContext *cxt = nullptr, int coro_id = 0);
 
-  void set_leaf(BLeafPage *page, GlobalAddress addr, const Key &k, const Value &v, bool & need_split);
-  void set_internal(BInternalPage *page, GlobalAddress addr, const Key &k, GlobalAddress v, bool & need_split);
+  void update_root(int level);
 
-  bool page_search(GlobalAddress page_addr, const Key &k, BSearchResult &result, Key expect_lowest, Key expect_highest, uint8_t expect_level, 
-                   CoroContext *cxt, int coro_id, bool from_cache = false);
+  bool page_search(GlobalAddress page_addr, const Key &k, BSearchResult &result, 
+                   CoroContext *cxt, int coro_id);
 
   void internal_page_search(BInternalPage *page, const Key &k, BSearchResult &result);
 

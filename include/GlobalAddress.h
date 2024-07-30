@@ -15,9 +15,9 @@ union {
   uint64_t val;
 };
 
- operator uint64_t() {
-  return val;
-}
+  operator uint64_t() {
+    return val;
+  }
 
   static GlobalAddress Null() {
     static GlobalAddress zero{0, 0};

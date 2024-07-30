@@ -4,4 +4,6 @@ build/*
 *.pyc
 .distexprunner
 *.png
+*.pdf
 draw.py
+.VSCodeCounter

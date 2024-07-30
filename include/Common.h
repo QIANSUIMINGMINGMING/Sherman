@@ -10,6 +10,11 @@
 #include <bitset>
 #include <limits>
 #include <cmath>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <time.h>
+#include <set>
 #include "Debug.h"
 #include "HugePageAlloc.h"
 #include "Rdma.h"
@@ -127,6 +132,8 @@ constexpr uint64_t kMaxLeafSplit = 10;
 constexpr uint16_t kMaxCoro = 8;
 constexpr int64_t kPerCoroRdmaBuf = 10 * 128 * 1024;
 
+constexpr uint64_t kMaxNumofInternalInsert = 5000;
+
 constexpr uint8_t kMaxHandOverTime = 8;
 
 constexpr int kIndexCacheSize = 1000; // MB
@@ -162,6 +169,8 @@ constexpr uint32_t kMcPageSize = 1024;
 constexpr uint32_t kMcPageSize = 1024
 #endif
 
+constexpr uint32_t kRecvMcPageSize = kMcPageSize + sizeof(struct ibv_grh);
+
 // for core binding
 constexpr uint16_t mcCmaCore = 95;
 constexpr uint16_t filterCore = 94;
@@ -169,6 +178,14 @@ constexpr uint16_t rpcCore = 93;
 constexpr uint16_t kMaxRpcCoreNum = 16;
 constexpr uint16_t dirCore = rpcCore - kMaxRpcCoreNum;
 constexpr uint16_t kMaxRwCoreNum = 4;
+
+constexpr uint16_t batchCore = 24 + kMaxRwCoreNum;
+constexpr uint16_t kMaxBatchInsertCoreNum = 8;
+
+constexpr uint16_t multicastSendCore = batchCore + kMaxBatchInsertCoreNum;
+constexpr uint16_t kMaxMulticastSendCoreNum = 8;
+
+constexpr uint16_t rate_limit_core = multicastSendCore + kMaxMulticastSendCoreNum;
 
 //for Rpc
 constexpr int kMcMaxPostList = 256;
@@ -321,5 +338,67 @@ inline void write_unlock_obsolete(
   version_lock_obsolete.fetch_add(0b11);
 }
 }
+
+
+
+// namespace flow_control {
+// constexpr uint32_t maximize_token_per_second = (20 * 1024 * 1024 * (sizeof(Key) + sizeof(TS) + sizeof(Value))) / (kMcPageSize * 8); 
+// constexpr uint32_t used_tokens = 10000;
+//   // Token bucket structure
+// typedef struct {
+//     int bucket_size;
+//     int tokens;
+//     int token_rate; // tokens per second
+//     uint64_t last_update;
+// } TokenBucket;
+
+// // Initialize token bucket
+// void init_token_bucket(TokenBucket *tb) {
+//     tb->bucket_size = 2 * maximize_token_per_second;
+//     tb->tokens = tb->bucket_size;
+//     tb->token_rate = maximize_token_per_second;
+//     tb->last_update = myClock::get_ts();
+// }
+
+// // Add tokens to the bucket
+// void add_tokens(TokenBucket *tb) {
+//   if (tb->tokens + used_tokens > tb->bucket_size) {
+//     return;
+//   }
+//   uint64_t now = myClock::get_ts();
+//   uint64_t elapsed = now - tb->last_update;
+//   int new_tokens = elapsed * tb->token_rate / (1000 * 1000 * 1000);
+
+//   if (new_tokens > 0) {
+//     tb->tokens += new_tokens;
+//     if (tb->tokens > tb->bucket_size) {
+//         tb->tokens = tb->bucket_size;
+//     }
+//     tb->last_update = now;
+//   }
+// }
+
+// // Check if there are enough tokens
+// int has_tokens(TokenBucket *tb, int tokens_needed) {
+//     add_tokens(tb);
+//     return tb->tokens >= tokens_needed;
+// }
+
+// // Consume tokens
+// void consume_tokens(TokenBucket *tb, int tokens_needed) {
+//     tb->tokens -= tokens_needed;
+// }
+
+// // Simulate sending data
+// void send_data(TokenBucket *tb, int data_size) {
+//     if (has_tokens(tb, data_size)) {
+//         consume_tokens(tb, data_size);
+//         printf("Sent data of size %d\n", data_size);
+//     } else {
+//         printf("Not enough tokens to send data of size %d\n", data_size);
+//     }
+// }
+
+// }
 
 #endif /* __COMMON_H__ */
