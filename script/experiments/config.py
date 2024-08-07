@@ -17,7 +17,7 @@ server_list = ServerList(
     # fill in
     Server('gpu01', '10.16.70.46', SERVER_PORT, ibIp="10.16.70.46"),
     Server('gpu02', '10.16.81.26', SERVER_PORT, ibIp="10.16.81.26"),
-    Server('gpu03', '10.16.70.16', SERVER_PORT, ibIp="10.16.70.16"),
+    Server('gpu03', '10.16.94.136', SERVER_PORT, ibIp="10.16.94.136"),
     Server('gpu04', '10.16.71.35', SERVER_PORT, ibIp="10.16.71.35"),
     Server('gpu05', '10.16.81.54', SERVER_PORT, ibIp="10.16.81.54"),
     Server('dbg21', '10.16.22.253', SERVER_PORT),

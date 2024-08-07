@@ -5,7 +5,7 @@ DEFINE_uint32(port, 20886, "port");
 DEFINE_uint32(mcport, 20887, "mcport");
 
 DEFINE_string(ownIp, "172.18.94.80", "own IP server");
-DEFINE_string(mcIp, "225.0.0.1", "multicast group IP");
+DEFINE_string(mcIp, "226.0.0.1", "multicast group IP");
 DEFINE_uint32(mcGroups, 10, "multicast group number");
 
 DEFINE_bool(storageNode, false, "storage node");

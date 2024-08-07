@@ -62,15 +62,7 @@ int verify_port(struct multicast_node * node) {
     return 0;
 } 
 
-multicastCM::multicastCM(): mcIp(FLAGS_mcIp), mcGroups(FLAGS_computeNodes), mbr(FLAGS_dramGB * FLAGS_rdmaMemoryFactor * 1024 * 1024 * 1024) {
-    for (int i = 0; i < kMaxRpcCoreNum; i++) {
-        pageQueues[i] = new moodycamel::BlockingReaderWriterCircularBuffer<TransferObj *>(kMcMaxPostList);  
-    } 
-
-    for (int i = 0; i < kMaxRpcCoreNum; i++) {
-        maintainers[i] = std::thread(std::bind(&multicastCM::mc_maintainer, i, this));
-    }
-
+multicastCM::multicastCM(): mcIp(FLAGS_mcIp), mcGroups(kMaxRpcCoreNum), mbr(FLAGS_dramGB * FLAGS_rdmaMemoryFactor * 1024 * 1024 * 1024) {
     connects_left = mcGroups;
     if (alloc_nodes(mcGroups))
         exit(1);
@@ -81,6 +73,14 @@ multicastCM::multicastCM(): mcIp(FLAGS_mcIp), mcGroups(FLAGS_computeNodes), mbr(
     * Pause to give SM chance to configure switches.  We don't want to
     * handle reliability issue in this simple test program.
     */
+    sleep(5);
+    for (int i = 0; i < kMaxRpcCoreNum; i++) {
+        pageQueues[i] = new moodycamel::BlockingReaderWriterCircularBuffer<TransferObj *>(kMcMaxPostList);  
+    } 
+
+    for (int i = 0; i < kMaxRpcCoreNum; i++) {
+        maintainers[i] = std::thread(std::bind(&multicastCM::mc_maintainer, i, this));
+    }
     sleep(5);    
 };
 
@@ -233,22 +233,6 @@ int multicastCM::create_message(struct multicast_node *node, int message_count) 
     // post initial recvs
     init_recvs(node);
 
-    //init send wrs
-    for (int i = 0; i < kMcMaxPostList; i++) {
-        node->send_wr[i].next = nullptr;
-        node->send_wr[i].sg_list = &node->send_sgl[i];
-        node->send_wr[i].num_sge = 1;
-        node->send_wr[i].opcode = IBV_WR_SEND;
-        node->send_wr[i].wr_id = (uint64_t) node;
-        node->send_wr[i].wr.ud.ah = node->ah;
-        node->send_wr[i].wr.ud.remote_qkey = node->remote_qkey;
-        node->send_wr[i].wr.ud.remote_qpn = node->remote_qpn;
-
-        node->send_sgl[i].length = kMcPageSize;
-        node->send_sgl[i].lkey = mr->lkey;
-        node->send_sgl[i].addr = (uintptr_t)node->send_messages + i * kMcPageSize;
-    }
-
     return 0;
 }
 
@@ -360,6 +344,25 @@ int multicastCM::join_handler(struct multicast_node *node, struct rdma_ud_param 
         return -1;
     }
 
+    //init send wrs
+    for (int i = 0; i < kMcMaxPostList; i++) {
+        node->send_wr[i].next = nullptr;
+        node->send_wr[i].sg_list = &node->send_sgl[i];
+        node->send_wr[i].num_sge = 1;
+        node->send_wr[i].opcode = IBV_WR_SEND;
+        if (i % (kMcMaxPostList/2) == 0){
+            node->send_wr[i].send_flags = IBV_SEND_SIGNALED;
+        }
+        node->send_wr[i].wr_id = (uint64_t) node;
+        node->send_wr[i].wr.ud.ah = node->ah;
+        node->send_wr[i].wr.ud.remote_qkey = node->remote_qkey;
+        node->send_wr[i].wr.ud.remote_qpn = node->remote_qpn;
+
+        node->send_sgl[i].length = kMcPageSize;
+        node->send_sgl[i].lkey = mr->lkey;
+        node->send_sgl[i].addr = (uintptr_t)node->send_messages + i * kMcPageSize;
+    }
+
     node->connected = 1;
     connects_left--;
     return 0;
@@ -373,6 +376,7 @@ int multicastCM::init_recvs(struct multicast_node * node) {
         node->recv_wr[i].sg_list = &node->recv_sgl[i];
         node->recv_wr[i].num_sge = 1;
         node->recv_wr[i].wr_id = (uintptr_t) node;
+        
 
         memset(&node->recv_sgl[i], 0, sizeof(node->recv_sgl[i]));
         node->recv_sgl[i].length = kRecvMcPageSize;
@@ -458,12 +462,20 @@ int multicastCM::get_pos(int tid, TransferObj *& next_message_address) {
 }
 
 void multicastCM::send_message(int tid, int pos) {
+
     struct multicast_node *node = &nodes[tid];
     struct ibv_send_wr *bad_send_wr;
     ibv_send_wr *send_wr = &node->send_wr[pos];
     ibv_sge *sge = &node->send_sgl[pos];
+    if (pos % (kMcMaxPostList/2) == 1) {
+        struct ibv_wc wc;
+        pollWithCQ(node->send_cq, 1, &wc);
+    }
     sge->addr = (uint64_t)node->send_messages + pos * kMcPageSize;
-    assert(!ibv_post_send(node->cma_id->qp, send_wr, &bad_send_wr));
+    int ret = ibv_post_send(node->cma_id->qp, send_wr, &bad_send_wr);
+    if (ret) {
+        printf("failed to post sends: %d\n", ret);
+    }
 }
 
 

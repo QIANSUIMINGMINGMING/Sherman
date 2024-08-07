@@ -30,7 +30,7 @@ public:
 
   void insert(Key k, TS ts, Value v, int pos, int thread_id) {
     rdmacm::multicast::TransferObj *cur = buffer[thread_id];
-    cur->elements[pos] = {k, ts, v};
+    cur->elements[pos] = {k, v, ts};
   }
 
   void emit(int thread_id, rdmacm::multicast::multicastCM *mcm) {
@@ -99,14 +99,6 @@ int main(int argc, char **argv) {
 
   printf("rate limit validate experiments start\n");
   printf("page size %d, cardinality %d\n", kMcPageSize, rdmacm::multicast::kMcCardinality);
-
-  for (uint32_t i = 0; i < FLAGS_mcGroups; i++) {
-      rate_limit_validators.push_back(std::unordered_map<uint64_t, uint64_t>());
-  }
-
-  for (uint32_t i = 0; i < FLAGS_mcGroups; i++) {
-      rate_limit_validators[i].reserve(FLAGS_psn_numbers);
-  }
   
   mcm = std::make_unique<rdmacm::multicast::multicastCM>();
   tob = std::make_unique<TransferObjBuffer>();

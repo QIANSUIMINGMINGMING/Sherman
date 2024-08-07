@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include <boost/version.hpp>
 #include <atomic>
 #include <bitset>
 #include <limits>

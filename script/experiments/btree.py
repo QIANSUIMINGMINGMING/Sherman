@@ -17,7 +17,8 @@ def compile(servers):
     git_cmd2 = f'git pull'
     procs = [s.run_cmd(git_cmd2) for s in servers]
     assert(all(p.wait() == 0 for p in procs))
-    cmake_cmd = f'rm -rf build && mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=DEBUG -DCMAKE_C_COMPILER=/bin/x86_64-linux-gnu-gcc-9 -DCMAKE_CXX_COMPILER=/bin/x86_64-linux-gnu-g++-9 .. && make -j'
+    # -DCMAKE_C_COMPILER=/bin/x86_64-linux-gnu-gcc-9 -DCMAKE_CXX_COMPILER=/bin/x86_64-linux-gnu-g++-9
+    cmake_cmd = f'rm -rf build && mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=DEBUG .. && make -j'
     procs = [s.run_cmd(cmake_cmd) for s in servers]
     assert(all(p.wait() == 0 for p in procs))
 
@@ -30,20 +31,20 @@ def restart_memcached(servers):
     #     memcache_ip = data.split('\n')[0]
     #     memcache_port = data.split('\n')[1]
     
-    # for s in servers:
-    #     if s.ip == memcache_ip:
-    #         s.run_cmd("bash ./restartMemc.sh")
+    for s in servers:
+        if s.ip == "10.16.94.136":
+            s.run_cmd("bash ./restartMemc.sh")
 
     # allocate huge pages
     huge_page_cmd = "sudo sh -c 'echo 36864 > /proc/sys/vm/nr_hugepages && ulimit -l unlimited'" 
     procs = [s.run_cmd(huge_page_cmd) for s in servers]
     assert(all(p.wait() == 0 for p in procs))
 
-@reg_exp(servers=config.server_list[:NUMBER_NODES], max_restarts=1)
-def get_current_time(servers):
-    servers.cd("/home/muxi/ccpro/Sherman/build")
-    procs = [s.run_cmd("./filter") for s in servers]
-    assert(all(p.wait() == 0 for p in procs))
+# @reg_exp(servers=config.server_list[:NUMBER_NODES], max_restarts=1)
+# def get_current_time(servers):
+#     servers.cd("/home/muxi/ccpro/Sherman/build")
+#     procs = [s.run_cmd("./filter") for s in servers]
+#     assert(all(p.wait() == 0 for p in procs))
 
 # @reg_exp(servers=config.server_list[:NUMBER_NODES], max_restarts=1)
 # def test_btree(servers):

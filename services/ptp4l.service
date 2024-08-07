@@ -1,0 +1,11 @@
+[Unit]
+Description=Precision Time Protocol (PTP) service
+Atter=network-online.target
+wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/ptp4l -f /etc/ptp4l-slave.conf -i ens4f1np1 -s
+
+[Install]
+WantedBy=multi-user.target
