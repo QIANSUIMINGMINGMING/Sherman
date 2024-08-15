@@ -16,9 +16,23 @@
 #include <unistd.h>
 #include <time.h>
 #include <set>
+
+#include <assert.h>
+#include <infiniband/verbs.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <time.h>
+#include <unistd.h>
+
+#include <functional>
+#include <string>
+#include <thread>
+
+#include <libmemcached/memcached.h>
 #include "Debug.h"
 #include "HugePageAlloc.h"
 #include "Rdma.h"
+#include "flags.h"
 
 #include "WRLock.h"
 
@@ -176,7 +190,7 @@ constexpr uint32_t kRecvMcPageSize = kMcPageSize + sizeof(struct ibv_grh);
 constexpr uint16_t mcCmaCore = 95;
 constexpr uint16_t filterCore = 94;
 constexpr uint16_t rpcCore = 93;
-constexpr uint16_t kMaxRpcCoreNum = 16;
+constexpr uint16_t kMaxRpcCoreNum = 1;
 constexpr uint16_t dirCore = rpcCore - kMaxRpcCoreNum;
 constexpr uint16_t kMaxRwCoreNum = 4;
 
@@ -184,12 +198,13 @@ constexpr uint16_t batchCore = 24 + kMaxRwCoreNum;
 constexpr uint16_t kMaxBatchInsertCoreNum = 8;
 
 constexpr uint16_t multicastSendCore = batchCore + kMaxBatchInsertCoreNum;
-constexpr uint16_t kMaxMulticastSendCoreNum = 8;
+constexpr uint16_t kMaxMulticastSendCoreNum = 1;
 
 constexpr uint16_t rate_limit_core = multicastSendCore + kMaxMulticastSendCoreNum;
 
 //for Rpc
-constexpr int kMcMaxPostList = 256;
+constexpr int kMcMaxPostList = 128;
+constexpr int kMcMaxRecvPostList = MAX_COMP * kMcMaxPostList;
 constexpr int kpostlist = 32;
 
 __inline__ unsigned long long rdtsc(void) {
@@ -340,6 +355,24 @@ inline void write_unlock_obsolete(
 }
 }
 
+namespace memcached_util {
+
+static const std::string SERVER_ADDR = "10.16.70.46";
+static const std::string SERVER_PORT = "2378";
+
+std::string trim(const std::string &s);
+
+void memcached_Connect(memcached_st *& memc);
+
+void memcachedSet(struct memcached_st *memc, const char *key, uint32_t klen, const char *val,
+                    uint32_t vlen);
+
+char* memcachedGet(struct memcached_st *memc, const char *key, uint32_t klen, size_t *v_size = nullptr);
+
+uint64_t memcachedFetchAndAdd(struct memcached_st *memc, const char *key, uint32_t klen);
+
+void memcached_barrier(struct memcached_st *memc, const std::string &barrierKey, uint64_t num_server);
+};
 
 
 // namespace flow_control {

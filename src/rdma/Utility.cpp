@@ -48,6 +48,11 @@ void checkDMSupported(struct ibv_context *ctx) {
     kMaxDeviceMemorySize = attrs.max_dm_size;
     printf("The RNIC has %dKB device memory\n", kMaxDeviceMemorySize / 1024);
   }
+
+  //print max wr
+
+  printf("The RNIC has %d max wr\n", attrs.orig_attr.max_qp_wr);
+
   // struct ibv_exp_device_attr attrs;
   // attrs.comp_mask = IBV_EXP_DEVICE_ATTR_UMR;
   // attrs.comp_mask |= IBV_EXP_DEVICE_ATTR_MAX_DM_SIZE;

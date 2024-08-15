@@ -27,6 +27,7 @@ DECLARE_uint32(memcachedPort);
 DECLARE_bool(testmachineOn);
 
 DECLARE_uint32(nodeId);
+DECLARE_uint64(cnodeId);
 DECLARE_uint64(all_worker);
 
 DECLARE_bool(mcIsSender);

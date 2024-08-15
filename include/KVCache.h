@@ -49,7 +49,7 @@ struct KVTS
   {
     return k == rhs.k && ts == rhs.ts;
   }
-};
+}__attribute__((packed));
 
 template <typename T>
 class MonotonicBufferRing

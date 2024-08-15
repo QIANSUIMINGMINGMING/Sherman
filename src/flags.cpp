@@ -23,6 +23,7 @@ DEFINE_uint32(memcachedPort, 2378, "memcached server port");
 DEFINE_bool(testmachineOn, false, "leafcache or not on test machine");
 
 DEFINE_uint32(nodeId, 0, "");
+DEFINE_uint64(cnodeId, 0, "node id for compute nodes");
 DEFINE_uint64(all_worker,1, "number of all worker threads in the cluster for barrier");
 
 DEFINE_bool(mcIsSender, false, "cmIsSender");

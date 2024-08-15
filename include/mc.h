@@ -13,8 +13,19 @@
 #include <thread>
 #include <rdma/rdma_cma.h>
 #include <infiniband/ib.h>
+#include <fstream>
 #include <unordered_map>
 #include <vector>
+#include <libmemcached/memcached.h>
+
+#include <assert.h>
+#include <infiniband/verbs.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <time.h>
+
+#include <functional>
+#include <string>
 
 #include "memManager.h"
 #include "flags.h"
@@ -30,10 +41,13 @@ constexpr int kMcCardinality =
     sizeof(KVTS);
 
 struct TransferObj {
+    KVTS elements[kMcCardinality];
     int psn{-1};
     int node_id;
-    KVTS elements[kMcCardinality];
 };
+// namespace transferobj {
+//     inline uint8_t*
+// }
 
 struct multicast_node {
     int id;
@@ -52,8 +66,8 @@ struct multicast_node {
     uint32_t remote_qkey;
     uint8_t * send_messages;
     uint8_t * recv_messages;
-    struct ibv_recv_wr recv_wr[kMcMaxPostList];
-    struct ibv_sge recv_sgl[kMcMaxPostList];
+    struct ibv_recv_wr recv_wr[kMcMaxRecvPostList];
+    struct ibv_sge recv_sgl[kMcMaxRecvPostList];
     struct ibv_send_wr send_wr[kMcMaxPostList];
     struct ibv_sge send_sgl[kMcMaxPostList];
     int send_pos{0};
@@ -80,12 +94,46 @@ public:
     moodycamel::BlockingReaderWriterCircularBuffer<TransferObj *> *getPageQueue(int i) {return pageQueues[i];}
     void send_message(int tid, int pos);
     int get_pos(int tid, TransferObj *&message_address);
-    void print_self() { 
+    void print_self() {
+        for (int i = 0; i < mcGroups; i++) {
+            printf("transferobg size %lu\n", sizeof(TransferObj));
+            printf("node %d: %d\n", i, nodes[i].id);
+            // ud related
+            printf("remote qpn: %d\n", nodes[i].remote_qpn);
+            printf("remote qkey: %d\n", nodes[i].remote_qkey);
+            // ah address
+            printf("ah address: %p\n", nodes[i].ah);
+        } 
+    }
+    void print_node_message() {
+        for (int i = 0; i < mcGroups; i++) {
+            printf("node %d: %d\n", i, nodes[i].id);
+            printf("send pos: %d\n", nodes[i].send_pos);
+
+        }
     }
 
 private:
+    void connect_memcached() {
+        memcached_util::memcached_Connect(memc);
+        if (FLAGS_cnodeId == 0){
+            memcached_util::memcachedSet(memc, SERVER_NUM_KEY.c_str(), SERVER_NUM_KEY.size(), "0", 1);
+        }
+    }
+    void init_message() {
+        memcached_util::memcachedFetchAndAdd(memc, SERVER_NUM_KEY.c_str(), SERVER_NUM_KEY.size());
+    }
+    void check_message() {
+        while (true) {
+            uint64_t v = std::stoull(memcached_util::memcachedGet(memc, SERVER_NUM_KEY.c_str(), SERVER_NUM_KEY.size()));
+            if (v == FLAGS_computeNodes) {
+                return;
+            }
+        }
+    }
+    
     int init_node(struct multicast_node *node);
-    int create_message(struct multicast_node *node, int message_count = kMcMaxPostList);
+    int create_message(struct multicast_node *node);
     void destroy_node(struct multicast_node *node); 
     int alloc_nodes (int connections);
 
@@ -115,6 +163,7 @@ private:
     static void *mc_maintainer(uint16_t id, multicastCM *me);
 
 private:
+    uint64_t cnode_id;
     pthread_t cmathread;
     std::thread maintainers[kMaxRpcCoreNum];
     moodycamel::BlockingReaderWriterCircularBuffer<TransferObj *> *pageQueues[kMaxRpcCoreNum];
@@ -128,6 +177,9 @@ private:
     struct ibv_mr *mr;
     struct ibv_pd *pd;
     utils::SynchronizedMonotonicBufferRessource mbr; 
+    
+    memcached_st *memc;
+    std::string SERVER_NUM_KEY = "server_num";
 };
 
 

@@ -14,7 +14,7 @@ std::unique_ptr<rdmacm::multicast::multicastCM> mcm;
 std::thread th[MAX_APP_THREAD];
 bool is_end = false;
 
-DEFINE_int64(psn_numbers, 1000, "The number of psn to be used");
+DEFINE_int64(psn_numbers, 100, "The number of psn to be used");
 DEFINE_int64(rate_limit_node_id, 0, "The node id to be used");
 DEFINE_int64(number_per_10_us, 1000, "The number of messages to be sent per 10 us");
 
@@ -36,7 +36,7 @@ public:
   void emit(int thread_id, rdmacm::multicast::multicastCM *mcm) {
     rdmacm::multicast::TransferObj *cur = buffer[thread_id];
     cur->psn = cur_psn.fetch_add(1);
-    if(cur->psn == FLAGS_psn_numbers) {
+    if(cur->psn == FLAGS_psn_numbers - 1) {
       is_end = true;
     }
     cur->node_id = FLAGS_rate_limit_node_id;
@@ -68,6 +68,7 @@ void thread_run(int id) {
   mehcached_zipf_init(&state, kKeySpace, zipfan,
                       (rdtsc() & (0x0000ffffffffffffull)) ^ id);
   int tob_pos = 0;
+  mcm->print_self();
 
   while (!is_end) {
     uint64_t dis = mehcached_zipf_next(&state);
