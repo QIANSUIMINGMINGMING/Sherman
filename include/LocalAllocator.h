@@ -1,25 +1,23 @@
 #if !defined(_LOCAL_ALLOC_H_)
 #define _LOCAL_ALLOC_H_
 
+#include <vector>
+
 #include "Common.h"
 #include "GlobalAddress.h"
-
-#include <vector>
 
 // for fine-grained shared memory alloc
 // not thread safe
 // now it is a simple log-structure alloctor
 // TODO: slab-based alloctor
 class LocalAllocator {
-
-public:
+ public:
   LocalAllocator() {
     head = GlobalAddress::Null();
     cur = GlobalAddress::Null();
   }
 
   GlobalAddress malloc(size_t size, bool &need_chunck, bool align = false) {
-
     if (align) {
     }
 
@@ -46,10 +44,10 @@ public:
     // TODO
   }
 
-private:
+ private:
   GlobalAddress head;
   GlobalAddress cur;
   std::vector<GlobalAddress> log_heads;
 };
 
-#endif // _LOCAL_ALLOC_H_
+#endif  // _LOCAL_ALLOC_H_

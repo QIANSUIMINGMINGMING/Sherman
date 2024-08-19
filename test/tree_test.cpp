@@ -1,8 +1,8 @@
-#include "DSM.h"
 #include "Tree.h"
 
-int main() {
+#include "DSM.h"
 
+int main() {
   DSMConfig config;
   config.machineNR = 2;
 

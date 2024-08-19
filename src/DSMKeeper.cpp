@@ -30,11 +30,9 @@ void DSMKeeper::initLocalMeta() {
 
     localMeta.dirUdQpn[i] = dirCon[i]->message->getQPN();
   }
-
 }
 
 bool DSMKeeper::connectNode(uint16_t remoteID) {
-
   setDataToRemote(remoteID);
 
   std::string setK = setKey(remoteID);
@@ -63,7 +61,6 @@ void DSMKeeper::setDataToRemote(uint16_t remoteID) {
     for (int k = 0; k < NR_DIRECTORY; ++k) {
       localMeta.appRcQpn2dir[i][k] = c->data[k][remoteID]->qp_num;
     }
-  
   }
 }
 
@@ -118,7 +115,6 @@ void DSMKeeper::setDataFromRemote(uint16_t remoteID, ExchangeMeta *remoteMeta) {
     }
   }
 
-
   for (int i = 0; i < MAX_APP_THREAD; ++i) {
     info.appRKey[i] = remoteMeta->appTh[i].rKey;
     info.appMessageQPN[i] = remoteMeta->appUdQpn[i];
@@ -140,14 +136,12 @@ void DSMKeeper::connectMySelf() {
 }
 
 void DSMKeeper::initRouteRule() {
-
   std::string k =
       std::string(ServerPrefix) + std::to_string(this->getMyNodeID());
   memSet(k.c_str(), k.size(), getMyIP().c_str(), getMyIP().size());
 }
 
 void DSMKeeper::barrier(const std::string &barrierKey) {
-
   std::string key = std::string("barrier-") + barrierKey;
   if (this->getMyNodeID() == 0) {
     memSet(key.c_str(), key.size(), "0", 1);
@@ -169,16 +163,16 @@ void DSMKeeper::barrier(const std::string &barrierKey, BarrierType bt) {
   if (bt == BarrierType::COMPUTE) {
     initialNodeId = this->getMemNR();
     NR = this->getCompNR();
-    if (this->getMyNodeID() >= this->getMemNR() ) {
+    if (this->getMyNodeID() >= this->getMemNR()) {
       toAdd = true;
     }
-  } else if (bt == BarrierType::MEMORY){
+  } else if (bt == BarrierType::MEMORY) {
     initialNodeId = 0;
     NR = this->getMemNR();
     if (this->getMyNodeID() < this->getMemNR()) {
       toAdd = true;
     }
-  } else if (bt == BarrierType::SERVER){
+  } else if (bt == BarrierType::SERVER) {
     initialNodeId = 0;
     NR = this->getServerNR();
     toAdd = true;

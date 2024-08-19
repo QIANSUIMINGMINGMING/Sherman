@@ -1,15 +1,17 @@
 #include "Tree.h"
-#include "IndexCache.h"
-#include "RdmaBuffer.h"
-#include "Timer.h"
-#include "SmallHashTable.h"
+
+#include <city.h>
 
 #include <algorithm>
-#include <city.h>
 #include <iostream>
 #include <queue>
 #include <utility>
 #include <vector>
+
+#include "IndexCache.h"
+#include "RdmaBuffer.h"
+#include "SmallHashTable.h"
+#include "Timer.h"
 
 bool enter_debug = false;
 
@@ -25,7 +27,7 @@ thread_local GlobalAddress path_stack[define::kMaxCoro]
 thread_local Timer timer;
 thread_local std::queue<uint16_t> hot_wait_queue;
 
-struct PageBatchInsertTable{
+struct PageBatchInsertTable {
   GlobalAddress page;
   int currentEntryCnt;
   int start_i;
@@ -36,8 +38,8 @@ HashTable leafHash;
 int emptyLeafPositionBuffer[kLeafCardinality];
 int updateLeafPositionBuffer[kLeafCardinality];
 
-Tree::Tree(DSM *dsm, uint16_t tree_id) : dsm(dsm), tree_id(tree_id), cache_size(FLAGS_KVCacheSize) {
-
+Tree::Tree(DSM *dsm, uint16_t tree_id)
+    : dsm(dsm), tree_id(tree_id), cache_size(FLAGS_KVCacheSize) {
   // initiate local lock table
   for (int i = 0; i < dsm->getClusterSize(); ++i) {
     local_locks[i] = new LocalLockNode[define::kNumOfLock];
@@ -72,14 +74,13 @@ Tree::Tree(DSM *dsm, uint16_t tree_id) : dsm(dsm), tree_id(tree_id), cache_size(
     // std::cout << "fail\n";
   }
 
-// #ifdef LOCK_FREE
-//   mcm = std::make_unique<rdmacm::multicast::multicastCM>();
-//   mcm->test_node();
-// #endif
+  // #ifdef LOCK_FREE
+  //   mcm = std::make_unique<rdmacm::multicast::multicastCM>();
+  //   mcm->test_node();
+  // #endif
 }
 
 void Tree::print_verbose() {
-
   int kLeafHdrOffset = STRUCT_OFFSET(LeafPage, hdr);
   int kInternalHdrOffset = STRUCT_OFFSET(InternalPage, hdr);
   if (kLeafHdrOffset != kInternalHdrOffset) {
@@ -118,7 +119,6 @@ extern GlobalAddress g_root_ptr;
 extern int g_root_level;
 extern bool enable_cache;
 GlobalAddress Tree::get_root_ptr(CoroContext *cxt, int coro_id) {
-
   if (g_root_ptr == GlobalAddress::Null()) {
     auto page_buffer = (dsm->get_rbuf(coro_id)).get_page_buffer();
     dsm->read_sync(page_buffer, root_ptr_ptr, sizeof(GlobalAddress), cxt);
@@ -136,7 +136,7 @@ void Tree::broadcast_new_root(GlobalAddress new_root_addr, int root_level) {
   m.type = RpcType::NEW_ROOT;
   m.addr = new_root_addr;
   m.level = root_level;
-  //TODO: update
+  // TODO: update
   for (int i = 0; i < dsm->getClusterSize(); ++i) {
     dsm->rpc_call_dir(m, i);
   }
@@ -146,7 +146,6 @@ bool Tree::update_new_root(GlobalAddress left, const Key &k,
                            GlobalAddress right, int level,
                            GlobalAddress old_root, CoroContext *cxt,
                            int coro_id) {
-
   auto page_buffer = dsm->get_rbuf(coro_id).get_page_buffer();
   auto cas_buffer = dsm->get_rbuf(coro_id).get_cas_buffer();
   auto new_root = new (page_buffer) InternalPage(left, k, right, level);
@@ -223,14 +222,12 @@ next:
 
 inline bool Tree::try_lock_addr(GlobalAddress lock_addr, uint64_t tag,
                                 uint64_t *buf, CoroContext *cxt, int coro_id) {
-
   bool hand_over = acquire_local_lock(lock_addr, cxt, coro_id);
   if (hand_over) {
     return true;
   }
 
   {
-
     uint64_t retry_cnt = 0;
     uint64_t pre_tag = 0;
     uint64_t conflict_tag = 0;
@@ -263,7 +260,6 @@ inline bool Tree::try_lock_addr(GlobalAddress lock_addr, uint64_t tag,
 inline void Tree::unlock_addr(GlobalAddress lock_addr, uint64_t tag,
                               uint64_t *buf, CoroContext *cxt, int coro_id,
                               bool async) {
-
   bool hand_over_other = can_hand_over(lock_addr);
   if (hand_over_other) {
     releases_local_lock(lock_addr);
@@ -286,7 +282,6 @@ void Tree::write_page_and_unlock(char *page_buffer, GlobalAddress page_addr,
                                  int page_size, uint64_t *cas_buffer,
                                  GlobalAddress lock_addr, uint64_t tag,
                                  CoroContext *cxt, int coro_id, bool async) {
-
   bool hand_over_other = can_hand_over(lock_addr);
   if (hand_over_other) {
     dsm->write_sync(page_buffer, page_addr, page_size, cxt);
@@ -320,7 +315,6 @@ void Tree::lock_and_read_page(char *page_buffer, GlobalAddress page_addr,
                               int page_size, uint64_t *cas_buffer,
                               GlobalAddress lock_addr, uint64_t tag,
                               CoroContext *cxt, int coro_id) {
-
   try_lock_addr(lock_addr, tag, cas_buffer, cxt, coro_id);
 
   dsm->read_sync(page_buffer, page_addr, page_size, cxt);
@@ -378,10 +372,9 @@ void Tree::insert(const Key &k, const Value &v, CoroContext *cxt, int coro_id) {
     GlobalAddress cache_addr;
     auto entry = index_cache->search_from_cache(k, &cache_addr,
                                                 dsm->getMyThreadID() == 0);
-    if (entry) { // cache hit
+    if (entry) {  // cache hit
       auto root = get_root_ptr(cxt, coro_id);
       if (leaf_page_store(cache_addr, k, v, root, 0, cxt, coro_id, true)) {
-
         cache_hit[dsm->getMyThreadID()][0]++;
         return;
       }
@@ -435,7 +428,7 @@ bool Tree::search(const Key &k, Value &v, CoroContext *cxt, int coro_id) {
     GlobalAddress cache_addr;
     entry = index_cache->search_from_cache(k, &cache_addr,
                                            dsm->getMyThreadID() == 0);
-    if (entry) { // cache hit
+    if (entry) {  // cache hit
       cache_hit[dsm->getMyThreadID()][0]++;
       from_cache = true;
       p = cache_addr;
@@ -447,7 +440,7 @@ bool Tree::search(const Key &k, Value &v, CoroContext *cxt, int coro_id) {
 
 next:
   if (!page_search(p, k, result, cxt, coro_id, from_cache)) {
-    if (from_cache) { // cache stale
+    if (from_cache) {  // cache stale
       index_cache->invalidate(entry);
       cache_hit[dsm->getMyThreadID()][0]--;
       cache_miss[dsm->getMyThreadID()][0]++;
@@ -461,16 +454,16 @@ next:
     goto next;
   }
   if (result.is_leaf) {
-    if (result.val != kValueNull) { // find
+    if (result.val != kValueNull) {  // find
       v = result.val;
       return true;
     }
-    if (result.slibing != GlobalAddress::Null()) { // turn right
+    if (result.slibing != GlobalAddress::Null()) {  // turn right
       p = result.slibing;
       goto next;
     }
-    return false; // not found
-  } else {        // internal
+    return false;  // not found
+  } else {         // internal
     p = result.slibing != GlobalAddress::Null() ? result.slibing
                                                 : result.next_level;
     goto next;
@@ -479,7 +472,6 @@ next:
 
 uint64_t Tree::range_query(const Key &from, const Key &to, Value *value_buffer,
                            CoroContext *cxt, int coro_id) {
-
   const int kParaFetch = 32;
   thread_local std::vector<InternalPage *> result;
   thread_local std::vector<GlobalAddress> leaves;
@@ -487,7 +479,7 @@ uint64_t Tree::range_query(const Key &from, const Key &to, Value *value_buffer,
   result.clear();
   leaves.clear();
   index_cache->search_range_from_cache(from, to, result);
-  
+
   // FIXME: here, we assume all innernal nodes are cached in compute node
   if (result.empty()) {
     return 0;
@@ -567,9 +559,8 @@ void Tree::del(const Key &k, CoroContext *cxt, int coro_id) {
     GlobalAddress cache_addr;
     auto entry = index_cache->search_from_cache(k, &cache_addr,
                                                 dsm->getMyThreadID() == 0);
-    if (entry) { // cache hit
+    if (entry) {  // cache hit
       if (leaf_page_del(cache_addr, k, 0, cxt, coro_id, true)) {
-
         cache_hit[dsm->getMyThreadID()][0]++;
         return;
       }
@@ -637,12 +628,12 @@ re_read:
     }
 
     if (from_cache &&
-        (k < page->hdr.lowest || k >= page->hdr.highest)) { // cache is stale
+        (k < page->hdr.lowest || k >= page->hdr.highest)) {  // cache is stale
       return false;
     }
 
     assert(result.level == 0);
-    if (k >= page->hdr.highest) { // should turn right
+    if (k >= page->hdr.highest) {  // should turn right
       result.slibing = page->hdr.sibling_ptr;
       return true;
     }
@@ -664,7 +655,7 @@ re_read:
       index_cache->add_to_cache(page);
     }
 
-    if (k >= page->hdr.highest) { // should turn right
+    if (k >= page->hdr.highest) {  // should turn right
       result.slibing = page->hdr.sibling_ptr;
       return true;
     }
@@ -683,7 +674,6 @@ re_read:
 
 void Tree::internal_page_search(InternalPage *page, const Key &k,
                                 SearchResult &result) {
-
   assert(k >= page->hdr.lowest);
   assert(k < page->hdr.highest);
 
@@ -705,7 +695,6 @@ void Tree::internal_page_search(InternalPage *page, const Key &k,
 
 void Tree::leaf_page_search(LeafPage *page, const Key &k,
                             SearchResult &result) {
-
   for (int i = 0; i < kLeafCardinality; ++i) {
     auto &r = page->records[i];
     if (r.key == k && r.value != kValueNull && r.f_version == r.r_version) {
@@ -740,7 +729,6 @@ void Tree::internal_page_store(GlobalAddress page_addr, const Key &k,
   assert(page->hdr.level == level);
   assert(page->check_consistent());
   if (k >= page->hdr.highest) {
-
     this->unlock_addr(lock_addr, tag, cas_buffer, cxt, coro_id, true);
 
     assert(page->hdr.sibling_ptr != GlobalAddress::Null());
@@ -757,7 +745,7 @@ void Tree::internal_page_store(GlobalAddress page_addr, const Key &k,
   bool is_update = false;
   uint16_t insert_index = 0;
   for (int i = cnt - 1; i >= 0; --i) {
-    if (page->records[i].key == k) { // find and update
+    if (page->records[i].key == k) {  // find and update
       page->records[i].ptr = v;
       // assert(false);
       is_update = true;
@@ -771,7 +759,7 @@ void Tree::internal_page_store(GlobalAddress page_addr, const Key &k,
 
   assert(cnt != kInternalCardinality);
 
-  if (!is_update) { // insert and shift
+  if (!is_update) {  // insert and shift
     for (int i = cnt; i > insert_index; --i) {
       page->records[i].key = page->records[i - 1].key;
       page->records[i].ptr = page->records[i - 1].ptr;
@@ -786,7 +774,7 @@ void Tree::internal_page_store(GlobalAddress page_addr, const Key &k,
   bool need_split = cnt == kInternalCardinality;
   Key split_key;
   GlobalAddress sibling_addr;
-  if (need_split) { // need split
+  if (need_split) {  // need split
     sibling_addr = dsm->alloc(kInternalPageSize);
     auto sibling_buf = rbuf.get_sibling_buffer();
 
@@ -799,7 +787,7 @@ void Tree::internal_page_store(GlobalAddress page_addr, const Key &k,
     split_key = page->records[m].key;
     assert(split_key > page->hdr.lowest);
     assert(split_key < page->hdr.highest);
-    for (int i = m + 1; i < cnt; ++i) { // move
+    for (int i = m + 1; i < cnt; ++i) {  // move
       sibling->records[i - m - 1].key = page->records[i].key;
       sibling->records[i - m - 1].ptr = page->records[i].ptr;
     }
@@ -823,10 +811,9 @@ void Tree::internal_page_store(GlobalAddress page_addr, const Key &k,
   write_page_and_unlock(page_buffer, page_addr, kInternalPageSize, cas_buffer,
                         lock_addr, tag, cxt, coro_id, need_split);
 
-  if (!need_split)
-    return;
+  if (!need_split) return;
 
-  if (root == page_addr) { // update root
+  if (root == page_addr) {  // update root
 
     if (update_new_root(page_addr, split_key, sibling_addr, level + 1, root,
                         cxt, coro_id)) {
@@ -847,7 +834,6 @@ void Tree::internal_page_store(GlobalAddress page_addr, const Key &k,
 bool Tree::leaf_page_store(GlobalAddress page_addr, const Key &k,
                            const Value &v, GlobalAddress root, int level,
                            CoroContext *cxt, int coro_id, bool from_cache) {
-
   uint64_t lock_index =
       CityHash64((char *)&page_addr, sizeof(page_addr)) % define::kNumOfLock;
 
@@ -876,13 +862,12 @@ bool Tree::leaf_page_store(GlobalAddress page_addr, const Key &k,
   assert(page->check_consistent());
 
   if (from_cache &&
-      (k < page->hdr.lowest || k >= page->hdr.highest)) { // cache is stale
+      (k < page->hdr.lowest || k >= page->hdr.highest)) {  // cache is stale
     this->unlock_addr(lock_addr, tag, cas_buffer, cxt, coro_id, true);
     return false;
   }
 
   if (k >= page->hdr.highest) {
-
     this->unlock_addr(lock_addr, tag, cas_buffer, cxt, coro_id, true);
     assert(page->hdr.sibling_ptr != GlobalAddress::Null());
     this->leaf_page_store(page->hdr.sibling_ptr, k, v, root, level, cxt,
@@ -895,7 +880,6 @@ bool Tree::leaf_page_store(GlobalAddress page_addr, const Key &k,
   int empty_index = -1;
   char *update_addr = nullptr;
   for (int i = 0; i < kLeafCardinality; ++i) {
-
     auto &r = page->records[i];
     if (r.value != kValueNull) {
       cnt++;
@@ -913,7 +897,7 @@ bool Tree::leaf_page_store(GlobalAddress page_addr, const Key &k,
 
   assert(cnt != kLeafCardinality);
 
-  if (update_addr == nullptr) { // insert new item
+  if (update_addr == nullptr) {  // insert new item
     if (empty_index == -1) {
       printf("%d cnt\n", cnt);
       assert(false);
@@ -946,7 +930,7 @@ bool Tree::leaf_page_store(GlobalAddress page_addr, const Key &k,
 
   Key split_key;
   GlobalAddress sibling_addr;
-  if (need_split) { // need split
+  if (need_split) {  // need split
     sibling_addr = dsm->alloc(kLeafPageSize);
     auto sibling_buf = rbuf.get_sibling_buffer();
 
@@ -960,7 +944,7 @@ bool Tree::leaf_page_store(GlobalAddress page_addr, const Key &k,
     assert(split_key > page->hdr.lowest);
     assert(split_key < page->hdr.highest);
 
-    for (int i = m; i < cnt; ++i) { // move
+    for (int i = m; i < cnt; ++i) {  // move
       sibling->records[i - m].key = page->records[i].key;
       sibling->records[i - m].value = page->records[i].value;
       page->records[i].key = 0;
@@ -986,10 +970,9 @@ bool Tree::leaf_page_store(GlobalAddress page_addr, const Key &k,
   write_page_and_unlock(page_buffer, page_addr, kLeafPageSize, cas_buffer,
                         lock_addr, tag, cxt, coro_id, need_split);
 
-  if (!need_split)
-    return true;
+  if (!need_split) return true;
 
-  if (root == page_addr) { // update root
+  if (root == page_addr) {  // update root
     if (update_new_root(page_addr, split_key, sibling_addr, level + 1, root,
                         cxt, coro_id)) {
       return true;
@@ -1039,7 +1022,7 @@ bool Tree::leaf_page_del(GlobalAddress page_addr, const Key &k, int level,
   assert(page->check_consistent());
 
   if (from_cache &&
-      (k < page->hdr.lowest || k >= page->hdr.highest)) { // cache is stale
+      (k < page->hdr.lowest || k >= page->hdr.highest)) {  // cache is stale
     this->unlock_addr(lock_addr, tag, cas_buffer, cxt, coro_id, true);
     return false;
   }
@@ -1076,7 +1059,6 @@ bool Tree::leaf_page_del(GlobalAddress page_addr, const Key &k, int level,
 }
 
 void Tree::run_coroutine(CoroFunc func, int id, int coro_cnt) {
-
   using namespace std::placeholders;
 
   assert(coro_cnt <= define::kMaxCoro);
@@ -1090,38 +1072,37 @@ void Tree::run_coroutine(CoroFunc func, int id, int coro_cnt) {
   master();
 }
 
-void Tree::batch_insert(KVTS *kvs, int n, CoroContext *cxt,
-                        int coro_id) {
+void Tree::batch_insert(KVTS *kvs, int n, CoroContext *cxt, int coro_id) {
   // sort by key
-  std::sort(kvs, kvs + n, [](const KVTS &a, const KVTS &b) { return a.k < b.k; });
+  std::sort(kvs, kvs + n,
+            [](const KVTS &a, const KVTS &b) { return a.k < b.k; });
   int i = 0;
-  while ( i < n ) {
+  while (i < n) {
     if (enable_cache) {
       int in_page_idx;
       auto entry = index_cache->search_from_cache(kvs[i].k, in_page_idx,
                                                   dsm->getMyThreadID() == 0);
       if (entry) {
         int from = i;
-        while (kvs[i].k <= entry->to ) {
+        while (kvs[i].k <= entry->to) {
           i = i + 1;
         }
         int to = i;
-        //TODO: insert from to to to the index
+        // TODO: insert from to to to the index
         do_batch_insert(kvs, from, to, entry->ptr, in_page_idx, cxt, coro_id);
       } else {
-        //TODO: search from the root
-      } 
+        // TODO: search from the root
+      }
     } else {
       // TODO: search from the root
     }
-  }                      
+  }
 }
 
-void Tree::do_batch_insert(KVTS *kvs, int from, int to, InternalPage* page, int in_page_idx, CoroContext *cxt,
-                           int coro_id) {
+void Tree::do_batch_insert(KVTS *kvs, int from, int to, InternalPage *page,
+                           int in_page_idx, CoroContext *cxt, int coro_id) {
   auto &rbuf = dsm->get_rbuf(coro_id);
   auto page_buffer = rbuf.get_page_buffer();
-
 
   int i = from;
   GlobalAddress start_p;
@@ -1131,12 +1112,12 @@ void Tree::do_batch_insert(KVTS *kvs, int from, int to, InternalPage* page, int 
     start_p = page->records[in_page_idx].ptr;
   }
   in_page_idx += 1;
-  while ( i < to ) {
+  while (i < to) {
     // read leafpage
     dsm->read_sync(page_buffer, start_p, kInternalPageSize, cxt);
     auto page = (LeafPage *)page_buffer;
     int page_start = i;
-    while ( kvs[i].k < page->hdr.highest && i < to) {
+    while (kvs[i].k < page->hdr.highest && i < to) {
       i++;
     }
 
@@ -1172,7 +1153,7 @@ void Tree::do_batch_insert(KVTS *kvs, int from, int to, InternalPage* page, int 
       }
     }
 
-    if (page_after_cnt <= kLeafCardinality ) {
+    if (page_after_cnt <= kLeafCardinality) {
       RdmaOpRegion rs[page_insert_cnt];
       int empty_used = 0;
       for (int k = 0; k < page_insert_cnt; k++) {
@@ -1183,13 +1164,13 @@ void Tree::do_batch_insert(KVTS *kvs, int from, int to, InternalPage* page, int 
           assert(empty_used < empty_pos_cnt);
           addr = (char *)&page->records[emptyLeafPositionBuffer[empty_used]];
         }
-        rs[k].source = (uint64_t) addr;
+        rs[k].source = (uint64_t)addr;
         rs[k].dest = GADD(start_p, addr - (char *)page);
         rs[k].size = sizeof(LeafEntry);
         rs[k].is_on_chip = false;
       }
 
-      //TODO:add async parameter
+      // TODO:add async parameter
       bool async = true;
       if (async) {
         dsm->write_batch(rs, page_insert_cnt, false);
@@ -1200,11 +1181,10 @@ void Tree::do_batch_insert(KVTS *kvs, int from, int to, InternalPage* page, int 
       // split and internal insert
     }
   }
-
 }
 
 void Tree::batch_insert(CoroContext *cxt, int coro_id) {
-  for (auto it=ts_table.begin(); it!=ts_table.end(); ++it) {
+  for (auto it = ts_table.begin(); it != ts_table.end(); ++it) {
     this->insert(it->first, it->second.v, cxt, coro_id);
   }
 }
@@ -1226,7 +1206,8 @@ void Tree::batch_insert(CoroContext *cxt, int coro_id) {
 //     timespec timestamp;
 //       if (clock_gettime(CLOCK_REALTIME, &timestamp))
 //           throw 1;
-//       TS ts = (uint64_t)(timestamp.tv_sec * 1000000000) + (uint64_t)(timestamp.tv_nsec);
+//       TS ts = (uint64_t)(timestamp.tv_sec * 1000000000) +
+//       (uint64_t)(timestamp.tv_nsec);
 //     if (r.is_search) {
 //       CacheHashMap::const_accessor a;
 //       if (ts_table.find(a, r.k)) {
@@ -1270,16 +1251,14 @@ void Tree::coro_worker(CoroYield &yield, RequstGen *gen, int coro_id) {
   auto thread_id = dsm->getMyThreadID();
 
   while (true) {
-
     auto r = gen->next();
 
     coro_timer.begin();
     if (r.is_search) {
       Value v;
       this->search(r.k, v, &ctx, coro_id);
-    } else { 
-      if (rand() % 5 == 0) 
-        this->insert(r.k, r.v, &ctx, coro_id);
+    } else {
+      if (rand() % 5 == 0) this->insert(r.k, r.v, &ctx, coro_id);
     }
     auto us_10 = coro_timer.end() / 100;
     if (us_10 >= LATENCY_WINDOWS) {
@@ -1290,13 +1269,11 @@ void Tree::coro_worker(CoroYield &yield, RequstGen *gen, int coro_id) {
 }
 
 void Tree::coro_master(CoroYield &yield, int coro_cnt) {
-
   for (int i = 0; i < coro_cnt; ++i) {
     yield(worker[i]);
   }
 
   while (true) {
-
     uint64_t next_coro_id;
 
     if (dsm->poll_rdma_cq_once(next_coro_id)) {
@@ -1321,7 +1298,7 @@ inline bool Tree::acquire_local_lock(GlobalAddress lock_addr, CoroContext *cxt,
   uint32_t ticket = lock_val << 32 >> 32;
   uint32_t current = lock_val >> 32;
 
-  while (ticket != current) { // lock failed
+  while (ticket != current) {  // lock failed
 
     if (cxt != nullptr) {
       hot_wait_queue.push(coro_id);
@@ -1337,14 +1314,13 @@ inline bool Tree::acquire_local_lock(GlobalAddress lock_addr, CoroContext *cxt,
 }
 
 inline bool Tree::can_hand_over(GlobalAddress lock_addr) {
-
   auto &node = local_locks[lock_addr.nodeID][lock_addr.offset / 8];
   uint64_t lock_val = node.ticket_lock.load(std::memory_order_relaxed);
 
   uint32_t ticket = lock_val << 32 >> 32;
   uint32_t current = lock_val >> 32;
 
-  if (ticket <= current + 1) { // no pending locks
+  if (ticket <= current + 1) {  // no pending locks
     node.hand_over = false;
   } else {
     node.hand_over = node.hand_time < define::kMaxHandOverTime;

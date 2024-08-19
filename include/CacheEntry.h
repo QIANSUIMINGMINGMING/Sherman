@@ -6,10 +6,9 @@
 
 struct CacheEntry {
   Key from;
-  Key to; // [from, to]
+  Key to;  // [from, to]
   mutable InternalPage *ptr;
-}
- __attribute__((packed));
+} __attribute__((packed));
 
 static_assert(sizeof(CacheEntry) == 2 * sizeof(Key) + sizeof(uint64_t), "XXX");
 
@@ -52,4 +51,4 @@ struct CacheEntryComparator {
   }
 };
 
-#endif // _CACHE_ENTRY_H_
+#endif  // _CACHE_ENTRY_H_

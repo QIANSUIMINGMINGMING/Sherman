@@ -31,17 +31,17 @@
 #include "memManager.h"
 #include "third_party/readerwritercircularbuffer.h"
 
-namespace rdmacm {
+namespace rdmacm_v2 {
 namespace multicast {
-
 constexpr int kMcCardinality =
-    (kMcPageSize - sizeof(int) - sizeof(int)) / sizeof(KVTS);
+    (kMcPageSize - sizeof(u64) - sizeof(u64)) / sizeof(KVTS);
 
 struct TransferObj {
   KVTS elements[kMcCardinality];
-  int psn{-1};
-  int node_id;
-};
+  u64 psn{std::numeric_limits<u64>::max()};
+  u64 node_id{std::numeric_limits<u64>::max()};
+} __attribute__((packed));
+
 // namespace transferobj {
 //     inline uint8_t*
 // }
@@ -187,5 +187,5 @@ class multicastCM {
   std::string SERVER_NUM_KEY = "server_num";
 };
 
-}  // namespace multicast
-}  // namespace rdmacm
+};  // namespace multicast
+};  // namespace rdmacm_v2

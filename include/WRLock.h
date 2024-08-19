@@ -4,18 +4,15 @@
 #include <atomic>
 
 class WRLock {
-
-private:
+ private:
   std::atomic<uint16_t> l;
   const static uint16_t UNLOCKED = 0;
   const static uint16_t LOCKED = 1;
 
-public:
+ public:
   WRLock() { init(); }
 
-  bool is_unlock() {
-    return l.load() == UNLOCKED;
-  }
+  bool is_unlock() { return l.load() == UNLOCKED; }
 
   void init() { l.store(UNLOCKED); }
 
@@ -33,8 +30,7 @@ public:
   };
 
   bool try_wLock() {
-    if (l.load(std::memory_order_relaxed) != UNLOCKED)
-      return false;
+    if (l.load(std::memory_order_relaxed) != UNLOCKED) return false;
 
     uint16_t f = UNLOCKED;
     return l.compare_exchange_strong(f, LOCKED);
@@ -58,12 +54,11 @@ public:
   bool try_rLock() {
   retry:
     uint16_t v = l.load(std::memory_order_relaxed);
-    if (v == LOCKED)
-      return false;
+    if (v == LOCKED) return false;
 
     uint16_t b = v + 2;
     if (!l.compare_exchange_strong(v, b)) {
-      goto retry; // concurrent reader;
+      goto retry;  // concurrent reader;
     }
 
     return true;

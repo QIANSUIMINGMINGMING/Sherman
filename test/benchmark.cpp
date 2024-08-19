@@ -1,14 +1,14 @@
+#include <city.h>
+#include <stdlib.h>
+#include <time.h>
+#include <unistd.h>
+
+#include <thread>
+#include <vector>
+
 #include "Timer.h"
 #include "Tree.h"
 #include "zipf.h"
-
-#include <city.h>
-#include <stdlib.h>
-#include <thread>
-#include <time.h>
-#include <unistd.h>
-#include <vector>
-
 
 //////////////////// workload parameters /////////////////////
 
@@ -26,11 +26,8 @@ double zipfan = 0;
 
 //////////////////// workload parameters /////////////////////
 
-
 extern uint64_t cache_miss[MAX_APP_THREAD][8];
 extern uint64_t cache_hit[MAX_APP_THREAD][8];
-
-
 
 std::thread th[MAX_APP_THREAD];
 uint64_t tp[MAX_APP_THREAD][8];
@@ -46,8 +43,7 @@ inline Key to_key(uint64_t k) {
 }
 
 class RequsetGenBench : public RequstGen {
-
-public:
+ public:
   RequsetGenBench(int coro_id, DSM *dsm, int id)
       : coro_id(coro_id), dsm(dsm), id(id) {
     seed = rdtsc();
@@ -68,7 +64,7 @@ public:
     return r;
   }
 
-private:
+ private:
   int coro_id;
   DSM *dsm;
   int id;
@@ -85,7 +81,6 @@ Timer bench_timer;
 std::atomic<int64_t> warmup_cnt{0};
 std::atomic_bool ready{false};
 void thread_run(int id) {
-
   int core_id;
   if (id < 24) {
     core_id = id + 24;
@@ -97,7 +92,8 @@ void thread_run(int id) {
   dsm->registerThread();
 
   uint64_t all_thread = kThreadCount * dsm->getComputeSize();
-  uint64_t my_id = kThreadCount * (dsm->getMyNodeID() - dsm->getMemorySize()) + id;
+  uint64_t my_id =
+      kThreadCount * (dsm->getMyNodeID() - dsm->getMemorySize()) + id;
 
   printf("I am thread %ld on compute nodes\n", my_id);
 
@@ -147,14 +143,13 @@ void thread_run(int id) {
 
   Timer timer;
   while (true) {
-
     uint64_t dis = mehcached_zipf_next(&state);
     uint64_t key = to_key(dis);
 
     Value v;
     timer.begin();
 
-    if (rand_r(&seed) % 100 < kReadRatio) { // GET
+    if (rand_r(&seed) % 100 < kReadRatio) {  // GET
       tree->search(key, v);
     } else {
       v = 12;
@@ -170,7 +165,6 @@ void thread_run(int id) {
     tp[id][0]++;
   }
 #endif
-
 }
 
 void parse_args(int argc, char *argv[]) {
@@ -184,8 +178,9 @@ void parse_args(int argc, char *argv[]) {
   kReadRatio = atoi(argv[3]);
   kThreadCount = atoi(argv[4]);
 
-  printf("kCompNodeCount %d, kMemoNodeCOunt %d, kReadRatio %d, kThreadCount %d\n", kCompNodeCount, kMemoNodeCount,
-         kReadRatio, kThreadCount);
+  printf(
+      "kCompNodeCount %d, kMemoNodeCOunt %d, kReadRatio %d, kThreadCount %d\n",
+      kCompNodeCount, kMemoNodeCount, kReadRatio, kThreadCount);
 }
 
 void cal_latency() {
@@ -233,7 +228,6 @@ void cal_latency() {
 }
 
 int main(int argc, char *argv[]) {
-
   parse_args(argc, argv);
 
   DSMConfig config;
@@ -255,12 +249,11 @@ int main(int argc, char *argv[]) {
   dsm->resetThread();
 
   if (dsm->getMyNodeID() < kMemoNodeCount) {
-    while (true) 
+    while (true)
       ;
   }
 
   for (int i = 0; i < kThreadCount; i++) {
-
     th[i] = std::thread(thread_run, i);
   }
 
@@ -274,7 +267,6 @@ int main(int argc, char *argv[]) {
 
   clock_gettime(CLOCK_REALTIME, &s);
   while (true) {
-
     sleep(2);
     clock_gettime(CLOCK_REALTIME, &e);
     int microseconds = (e.tv_sec - s.tv_sec) * 1000000 +

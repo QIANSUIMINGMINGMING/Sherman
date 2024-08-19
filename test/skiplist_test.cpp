@@ -1,5 +1,5 @@
-#include "third_party/inlineskiplist.h"
 #include "Timer.h"
+#include "third_party/inlineskiplist.h"
 
 // Our test skip list stores 8-byte unsigned integers
 typedef uint64_t Key;
@@ -55,7 +55,6 @@ int main() {
     bool res = list.InsertConcurrently(buf);
     (void)res;
   }
-
 
   Timer t;
   t.begin();

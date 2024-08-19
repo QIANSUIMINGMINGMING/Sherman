@@ -2,23 +2,20 @@
 #define __DIRECTORY_H__
 
 #include <thread>
-
 #include <unordered_map>
 
 #include "Common.h"
-
 #include "Connection.h"
 #include "GlobalAllocator.h"
 
-
 class Directory {
-public:
+ public:
   Directory(DirectoryConnection *dCon, RemoteConnection *remoteInfo,
             uint32_t machineNR, uint16_t dirID, uint16_t nodeID);
 
   ~Directory();
 
-private:
+ private:
   DirectoryConnection *dCon;
   RemoteConnection *remoteInfo;
 
@@ -35,7 +32,6 @@ private:
   void sendData2App(const RawMessage *m);
 
   void process_message(const RawMessage *m);
-
 };
 
 struct RootCache {

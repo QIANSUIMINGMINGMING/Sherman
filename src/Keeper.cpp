@@ -1,4 +1,5 @@
 #include "Keeper.h"
+
 #include <fstream>
 #include <iostream>
 #include <random>
@@ -16,8 +17,14 @@ std::string trim(const std::string &s) {
 
 const char *Keeper::SERVER_NUM_KEY = "serverNum";
 
-Keeper::Keeper(uint32_t maxServer, uint32_t maxMem, uint32_t maxComp )
-    : maxServer(maxServer), curServer(0), maxMem(maxMem), curMem(0), maxComp(maxComp), curComp(0), memc(NULL) {}
+Keeper::Keeper(uint32_t maxServer, uint32_t maxMem, uint32_t maxComp)
+    : maxServer(maxServer),
+      curServer(0),
+      maxMem(maxMem),
+      curMem(0),
+      maxComp(maxComp),
+      curComp(0),
+      memc(NULL) {}
 
 Keeper::~Keeper() {
   //   listener.detach();
@@ -72,7 +79,6 @@ void Keeper::serverEnter() {
     rc = memcached_increment(memc, SERVER_NUM_KEY, strlen(SERVER_NUM_KEY), 1,
                              &serverNum);
     if (rc == MEMCACHED_SUCCESS) {
-
       myNodeID = serverNum - 1;
 
       printf("I am server %d\n", myNodeID);
@@ -85,7 +91,6 @@ void Keeper::serverEnter() {
 }
 
 void Keeper::serverConnect() {
-
   size_t l;
   uint32_t flags;
   memcached_return rc;
@@ -114,7 +119,6 @@ void Keeper::serverConnect() {
 
 void Keeper::memSet(const char *key, uint32_t klen, const char *val,
                     uint32_t vlen) {
-
   memcached_return rc;
   while (true) {
     rc = memcached_set(memc, key, klen, val, vlen, (time_t)0, (uint32_t)0);
@@ -126,14 +130,12 @@ void Keeper::memSet(const char *key, uint32_t klen, const char *val,
 }
 
 char *Keeper::memGet(const char *key, uint32_t klen, size_t *v_size) {
-
   size_t l;
   char *res;
   uint32_t flags;
   memcached_return rc;
 
   while (true) {
-
     res = memcached_get(memc, key, klen, &l, &flags, &rc);
     if (rc == MEMCACHED_SUCCESS) {
       break;
@@ -144,7 +146,7 @@ char *Keeper::memGet(const char *key, uint32_t klen, size_t *v_size) {
   if (v_size != nullptr) {
     *v_size = l;
   }
-  
+
   return res;
 }
 

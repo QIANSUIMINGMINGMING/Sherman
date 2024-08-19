@@ -43,28 +43,26 @@
 #pragma once
 #include <assert.h>
 #include <stdlib.h>
+
 #include <algorithm>
 #include <atomic>
-#include <type_traits>
-#include "slice.h"
-#include "random.h"
-
 #include <cerrno>
 #include <cstddef>
+#include <type_traits>
+
+#include "random.h"
+#include "slice.h"
 class Allocator {
-public:
-  char *Allocate(size_t bytes) { return AllocateAligned(bytes); }
-  char *AllocateAligned(size_t bytes, size_t huge_page_size = 0) {
-    return (char *)aligned_alloc(8, bytes);
+ public:
+  char* Allocate(size_t bytes) { return AllocateAligned(bytes); }
+  char* AllocateAligned(size_t bytes, size_t huge_page_size = 0) {
+    return (char*)aligned_alloc(8, bytes);
   }
 };
 
-
-#define LIKELY(x)   (__builtin_expect((x), 1))
+#define LIKELY(x) (__builtin_expect((x), 1))
 #define UNLIKELY(x) (__builtin_expect((x), 0))
 #define PREFETCH(addr, rw, locality) __builtin_prefetch(addr, rw, locality)
-
-
 
 template <class Comparator>
 class InlineSkipList {
@@ -73,8 +71,8 @@ class InlineSkipList {
   struct Splice;
 
  public:
-  using DecodedKey = \
-    typename std::remove_reference<Comparator>::type::DecodedType;
+  using DecodedKey =
+      typename std::remove_reference<Comparator>::type::DecodedType;
 
   static const uint16_t kMaxPossibleHeight = 32;
 
@@ -269,9 +267,9 @@ class InlineSkipList {
   // point to a node that is before the key, and after should point to
   // a node that is after the key.  after should be nullptr if a good after
   // node isn't conveniently available.
-  template<bool prefetch_before>
-  void FindSpliceForLevel(const DecodedKey& key, Node* before, Node* after, int level,
-                          Node** out_prev, Node** out_next);
+  template <bool prefetch_before>
+  void FindSpliceForLevel(const DecodedKey& key, Node* before, Node* after,
+                          int level, Node** out_prev, Node** out_next);
 
   // Recomputes Splice levels from highest_level (inclusive) down to
   // lowest_level (inclusive).
@@ -724,8 +722,8 @@ void InlineSkipList<Comparator>::FindSpliceForLevel(const DecodedKey& key,
       PREFETCH(next->Next(level), 0, 1);
     }
     if (prefetch_before == true) {
-      if (next != nullptr && level>0) {
-        PREFETCH(next->Next(level-1), 0, 1);
+      if (next != nullptr && level > 0) {
+        PREFETCH(next->Next(level - 1), 0, 1);
       }
     }
     assert(before == head_ || next == nullptr ||
@@ -749,7 +747,7 @@ void InlineSkipList<Comparator>::RecomputeSpliceLevels(const DecodedKey& key,
   assert(recompute_level <= splice->height_);
   for (int i = recompute_level - 1; i >= 0; --i) {
     FindSpliceForLevel<true>(key, splice->prev_[i + 1], splice->next_[i + 1], i,
-                       &splice->prev_[i], &splice->next_[i]);
+                             &splice->prev_[i], &splice->next_[i]);
   }
 }
 
@@ -839,8 +837,7 @@ bool InlineSkipList<Comparator>::Insert(const char* key, Splice* splice,
           // we're pessimistic, recompute everything
           recompute_height = max_height;
         }
-      } else if (KeyIsAfterNode(key_decoded,
-                                splice->next_[recompute_height])) {
+      } else if (KeyIsAfterNode(key_decoded, splice->next_[recompute_height])) {
         // key is from after splice
         if (allow_partial_splice_fix) {
           Node* bad = splice->next_[recompute_height];

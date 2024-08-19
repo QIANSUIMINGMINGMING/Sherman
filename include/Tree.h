@@ -3,15 +3,16 @@
 
 #define LOCK_FREE
 
-#include "DSM.h"
-#include "mc.h"
-#include "KVCache.h"
+#include <city.h>
+#include <oneapi/tbb/concurrent_hash_map.h>
 
 #include <atomic>
-#include <city.h>
 #include <functional>
 #include <iostream>
-#include <oneapi/tbb/concurrent_hash_map.h>
+
+#include "DSM.h"
+#include "KVCache.h"
+#include "mc.h"
 
 // #define CONFIG_ENABLE_CRC
 
@@ -32,7 +33,7 @@ struct Request {
 };
 
 class RequstGen {
-public:
+ public:
   RequstGen() = default;
   virtual Request next() { return Request{}; }
 };
@@ -50,8 +51,7 @@ struct SearchResult {
 class InternalPage;
 class LeafPage;
 class Tree {
-
-public:
+ public:
   Tree(DSM *dsm, uint16_t tree_id = 0);
 
   void insert(const Key &k, const Value &v, CoroContext *cxt = nullptr,
@@ -78,11 +78,11 @@ public:
   void index_cache_statistics();
   void clear_statistics();
 
-private:
+ private:
   DSM *dsm;
 
   uint64_t tree_id;
-  GlobalAddress root_ptr_ptr; // the address which stores root pointer;
+  GlobalAddress root_ptr_ptr;  // the address which stores root pointer;
 
   // static thread_local int coro_id;
   static thread_local CoroCall worker[define::kMaxCoro];
@@ -106,7 +106,8 @@ private:
   void coro_worker(CoroYield &yield, RequstGen *gen, int coro_id);
   void coro_master(CoroYield &yield, int coro_cnt);
 
-  void do_batch_insert(KVTS *kvs, int from, int to, InternalPage *page, int in_page_idx, CoroContext *cxt, int coro_id);
+  void do_batch_insert(KVTS *kvs, int from, int to, InternalPage *page,
+                       int in_page_idx, CoroContext *cxt, int coro_id);
 
   void broadcast_new_root(GlobalAddress new_root_addr, int root_level);
   bool update_new_root(GlobalAddress left, const Key &k, GlobalAddress right,
@@ -151,7 +152,7 @@ private:
 };
 
 class Header {
-private:
+ private:
   // TODO: add entry count
   GlobalAddress leftmost_ptr;
   GlobalAddress sibling_ptr;
@@ -165,7 +166,7 @@ private:
   friend class Tree;
   friend class IndexCache;
 
-public:
+ public:
   Header() {
     leftmost_ptr = GlobalAddress::Null();
     sibling_ptr = GlobalAddress::Null();
@@ -185,7 +186,7 @@ public:
 ;
 
 class InternalEntry {
-public:
+ public:
   Key key;
   GlobalAddress ptr;
 
@@ -196,7 +197,7 @@ public:
 } __attribute__((packed));
 
 class LeafEntry {
-public:
+ public:
   uint8_t f_version : 4;
   Key key;
   Value value;
@@ -219,7 +220,7 @@ constexpr int kLeafCardinality =
     sizeof(LeafEntry);
 
 class InternalPage {
-private:
+ private:
   union {
     uint32_t crc;
     uint64_t embedding_lock;
@@ -236,7 +237,7 @@ private:
   friend class Tree;
   friend class IndexCache;
 
-public:
+ public:
   // this is called when tree grows
   InternalPage(GlobalAddress left, const Key &key, GlobalAddress right,
                uint32_t level = 0) {
@@ -272,7 +273,6 @@ public:
   }
 
   bool check_consistent() const {
-
     bool succ = true;
 #ifdef CONFIG_ENABLE_CRC
     auto cal_crc =
@@ -302,7 +302,7 @@ public:
 } __attribute__((packed));
 
 class LeafPage {
-private:
+ private:
   union {
     uint32_t crc;
     uint64_t embedding_lock;
@@ -316,7 +316,7 @@ private:
 
   friend class Tree;
 
-public:
+ public:
   LeafPage(uint32_t level = 0) {
     hdr.level = level;
     records[0].value = kValueNull;
@@ -337,7 +337,6 @@ public:
   }
 
   bool check_consistent() const {
-
     bool succ = true;
 #ifdef CONFIG_ENABLE_CRC
     auto cal_crc =
@@ -359,4 +358,4 @@ public:
 
 } __attribute__((packed));
 
-#endif // _TREE_H_
+#endif  // _TREE_H_

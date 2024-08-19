@@ -16,7 +16,7 @@ struct ExPerThread {
 
   uint32_t rKey;
 
-  uint32_t lock_rkey; //for directory on-chip memory 
+  uint32_t lock_rkey;  // for directory on-chip memory
 } __attribute__((packed));
 
 struct ExchangeMeta {
@@ -36,15 +36,10 @@ struct ExchangeMeta {
 
 } __attribute__((packed));
 
-enum class BarrierType {
-  SERVER,
-  COMPUTE,
-  MEMORY
-};
+enum class BarrierType { SERVER, COMPUTE, MEMORY };
 
 class DSMKeeper : public Keeper {
-
-private:
+ private:
   static const char *OK;
   static const char *ServerPrefix;
 
@@ -72,15 +67,17 @@ private:
   void setDataToRemote(uint16_t remoteID);
   void setDataFromRemote(uint16_t remoteID, ExchangeMeta *remoteMeta);
 
-protected:
+ protected:
   virtual bool connectNode(uint16_t remoteID) override;
 
-public:
-  DSMKeeper(ThreadConnection **thCon, DirectoryConnection **dirCon, RemoteConnection *remoteCon,
-            uint32_t maxServer = 12, uint32_t maxMem = 6, uint32_t maxComp = 6)
-      : Keeper(maxServer, maxMem, maxComp), thCon(thCon), dirCon(dirCon),
+ public:
+  DSMKeeper(ThreadConnection **thCon, DirectoryConnection **dirCon,
+            RemoteConnection *remoteCon, uint32_t maxServer = 12,
+            uint32_t maxMem = 6, uint32_t maxComp = 6)
+      : Keeper(maxServer, maxMem, maxComp),
+        thCon(thCon),
+        dirCon(dirCon),
         remoteCon(remoteCon) {
-
     initLocalMeta();
 
     if (!connectMemcached()) {

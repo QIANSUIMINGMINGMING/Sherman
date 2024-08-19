@@ -8,7 +8,8 @@ constexpr int buffer_size = (1 << 31) / sizeof(SkipListNode);
 
 // class TestMachine {
 // public:
-//     TestMachine(int sender_num, int recv_num): sender_num(sender_num), recevier_num(recv_num) {
+//     TestMachine(int sender_num, int recv_num): sender_num(sender_num),
+//     recevier_num(recv_num) {
 //         cm = new rdmacm::multicast::multicastCM();
 //         kvCache = new KVCache(buffer_size);
 
@@ -17,10 +18,12 @@ constexpr int buffer_size = (1 << 31) / sizeof(SkipListNode);
 //         // }
 
 //         for (int i = 0; i < recv_num; i++) {
-//             recv_insertion_threads[i] = std::thread(std::bind(&TestMachine::recv_insertion_thread_run, this, new int(i)));
-//         } 
-//     } 
-    
+//             recv_insertion_threads[i] =
+//             std::thread(std::bind(&TestMachine::recv_insertion_thread_run,
+//             this, new int(i)));
+//         }
+//     }
+
 //     void insert(Key k, Value v, TransferObj * page, int i) {
 //         TS cur = myClock::get_ts();
 //         page->elements[i].k = k;
@@ -28,14 +31,14 @@ constexpr int buffer_size = (1 << 31) / sizeof(SkipListNode);
 //         page->elements[i].ts = cur;
 //         kvCache->insert(k, cur, v);
 //     }
-    
+
 //     void search(Key k, Value &v) {
 //         if (!kvCache->search(k, v)) {
 //             search_in_tree();
 //         }
 //     }
 
-// private: 
+// private:
 //     void search_in_tree() {}
 
 //     static void recv_insertion_thread_run(void * args[]) {
@@ -50,7 +53,7 @@ constexpr int buffer_size = (1 << 31) / sizeof(SkipListNode);
 //             for (int i = 0; i < kMcCardinality; i++) {
 //                 me->kvCache->insert(&page->elements[i]);
 //             }
-//         }    
+//         }
 //     }
 
 //     int sender_num;

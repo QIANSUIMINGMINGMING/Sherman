@@ -4,13 +4,13 @@
 #define forceinline inline __attribute__((always_inline))
 
 #include <assert.h>
-#include <cstring>
-#include <infiniband/verbs.h>
 #include <infiniband/mlx5dv.h>
+#include <infiniband/verbs.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <unistd.h>
 
+#include <cstring>
 #include <list>
 #include <string>
 
@@ -62,8 +62,7 @@ bool createContext(RdmaContext *context, uint8_t port = 1, int gidIndex = 3,
 bool destoryContext(RdmaContext *context);
 
 ibv_mr *createMemoryRegion(uint64_t mm, uint64_t mmSize, RdmaContext *ctx);
-ibv_mr *createMemoryRegionOnChip(uint64_t mm, size_t mmSize,
-                                 RdmaContext *ctx);
+ibv_mr *createMemoryRegionOnChip(uint64_t mm, size_t mmSize, RdmaContext *ctx);
 
 bool createQueuePair(ibv_qp **qp, ibv_qp_type mode, ibv_cq *cq,
                      RdmaContext *context, uint32_t qpsMaxDepth = 128,
@@ -85,7 +84,6 @@ bool modifyQPtoRTR(struct ibv_qp *qp, uint32_t remoteQPN, uint16_t remoteLid,
 bool modifyQPtoRTS(struct ibv_qp *qp);
 
 bool modifyUDtoRTS(struct ibv_qp *qp, RdmaContext *context);
-
 
 //// Operation.cpp
 int pollWithCQ(ibv_cq *cq, int pollNumber, struct ibv_wc *wc);
@@ -112,9 +110,9 @@ bool rdmaWrite(ibv_qp *qp, uint64_t source, uint64_t dest, uint64_t size,
 bool rdmaFetchAndAdd(ibv_qp *qp, uint64_t source, uint64_t dest, uint64_t add,
                      uint32_t lkey, uint32_t remoteRKey);
 bool rdmaFetchAndAddBoundary(ibv_qp *qp, uint64_t source, uint64_t dest,
-                         uint64_t add, uint32_t lkey, uint32_t remoteRKey,
-                         uint64_t boundary = 63, bool singal = true,
-                         uint64_t wr_id = 0);
+                             uint64_t add, uint32_t lkey, uint32_t remoteRKey,
+                             uint64_t boundary = 63, bool singal = true,
+                             uint64_t wr_id = 0);
 
 bool rdmaCompareAndSwap(ibv_qp *qp, uint64_t source, uint64_t dest,
                         uint64_t compare, uint64_t swap, uint32_t lkey,
@@ -129,7 +127,6 @@ bool rdmaCompareAndSwapMask(ibv_qp *qp, uint64_t source, uint64_t dest,
 void rdmaQueryQueuePair(ibv_qp *qp);
 void checkDMSupported(struct ibv_context *ctx);
 
-
 //// specified
 bool rdmaWriteBatch(ibv_qp *qp, RdmaOpRegion *ror, int k, bool isSignaled,
                     uint64_t wrID = 0);
@@ -141,5 +138,5 @@ bool rdmaWriteFaa(ibv_qp *qp, const RdmaOpRegion &write_ror,
                   bool isSignaled, uint64_t wrID = 0);
 bool rdmaWriteCas(ibv_qp *qp, const RdmaOpRegion &write_ror,
                   const RdmaOpRegion &cas_ror, uint64_t compare, uint64_t swap,
-                  bool isSignaled, uint64_t wrID = 0);                 
+                  bool isSignaled, uint64_t wrID = 0);
 #endif

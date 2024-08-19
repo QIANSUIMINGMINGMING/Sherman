@@ -9,11 +9,10 @@ class Message;
 
 // #messageNR send pool and #messageNR message pool
 class AbstractMessageConnection {
-
   const static int kBatchCount = 4;
 
-protected:
-  ibv_qp *message; // ud or raw packet
+ protected:
+  ibv_qp *message;  // ud or raw packet
   uint16_t messageNR;
 
   ibv_mr *messageMR;
@@ -32,12 +31,12 @@ protected:
   ibv_cq *send_cq;
   uint64_t sendCounter;
 
-  uint16_t sendPadding; // ud: 0
-                        // rp: ?
-  uint16_t recvPadding; // ud: 40
-                        // rp: ?
+  uint16_t sendPadding;  // ud: 0
+                         // rp: ?
+  uint16_t recvPadding;  // ud: 40
+                         // rp: ?
 
-public:
+ public:
   AbstractMessageConnection(ibv_qp_type type, uint16_t sendPadding,
                             uint16_t recvPadding, RdmaContext &ctx, ibv_cq *cq,
                             uint32_t messageNR);

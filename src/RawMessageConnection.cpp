@@ -10,7 +10,6 @@ void RawMessageConnection::initSend() {}
 
 void RawMessageConnection::sendRawMessage(RawMessage *m, uint32_t remoteQPN,
                                           ibv_ah *ah) {
-
   if ((sendCounter & SIGNAL_BATCH) == 0 && sendCounter > 0) {
     ibv_wc wc;
     pollWithCQ(send_cq, 1, &wc);

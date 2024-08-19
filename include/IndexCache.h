@@ -1,16 +1,16 @@
 #if !defined(_INDEX_CACHE_H_)
 #define _INDEX_CACHE_H_
 
+#include <atomic>
+#include <queue>
+#include <vector>
+
 #include "CacheEntry.h"
 #include "HugePageAlloc.h"
 #include "Timer.h"
 #include "WRLock.h"
-#include "third_party/inlineskiplist.h"
 #include "mc.h"
-
-#include <atomic>
-#include <queue>
-#include <vector>
+#include "third_party/inlineskiplist.h"
 // #include <oneapi/tbb/concurrent_hash_map.h>
 
 extern bool enter_debug;
@@ -23,7 +23,8 @@ using CacheSkipList = InlineSkipList<CacheEntryComparator>;
 
 //   KVCacheEntry(TS ts, Value v):ts(ts), v(v) {}
 // };
-// using CacheHashMap = oneapi::tbb::concurrent_hash_map<uint64_t, KVCacheEntry>;
+// using CacheHashMap = oneapi::tbb::concurrent_hash_map<uint64_t,
+// KVCacheEntry>;
 
 // class KVCache {
 // public:
@@ -58,9 +59,8 @@ using CacheSkipList = InlineSkipList<CacheEntryComparator>;
 //   void batch_insert() {
 
 //   }
-  
-      
-  // const CacheEntry *search_from_cache(const Key &k, GlobalAddress *addr,
+
+// const CacheEntry *search_from_cache(const Key &k, GlobalAddress *addr,
 //                                       bool is_leader = false);
 
 //   void search_range_from_cache(const Key &from, const Key &to,
@@ -76,7 +76,7 @@ using CacheSkipList = InlineSkipList<CacheEntryComparator>;
 
 //   void statistics();
 
-//   void bench();  
+//   void bench();
 
 // private:
 
@@ -86,7 +86,7 @@ using CacheSkipList = InlineSkipList<CacheEntryComparator>;
 
 //   //   KVCacheEntry(TS ts, Value v):ts(ts), v(v) {}
 //   // };
-  
+
 //   CacheHashMap ts_table;
 //   int cache_size;
 
@@ -96,14 +96,13 @@ using CacheSkipList = InlineSkipList<CacheEntryComparator>;
 // };
 
 class IndexCache {
-
-public:
+ public:
   IndexCache(int cache_size);
 
   bool add_to_cache(InternalPage *page);
   const CacheEntry *search_from_cache(const Key &k, GlobalAddress *addr,
                                       bool is_leader = false);
-  const CacheEntry *search_from_cache(const Key &k, int &entry_idx, 
+  const CacheEntry *search_from_cache(const Key &k, int &entry_idx,
                                       bool is_leader = false);
 
   void search_range_from_cache(const Key &from, const Key &to,
@@ -121,8 +120,8 @@ public:
 
   void bench();
 
-private:
-  uint64_t cache_size; // MB;
+ private:
+  uint64_t cache_size;  // MB;
   std::atomic<int64_t> free_page_cnt;
   std::atomic<int64_t> skiplist_node_cnt;
   int64_t all_page_cnt;
@@ -150,12 +149,11 @@ inline IndexCache::IndexCache(int cache_size) : cache_size(cache_size) {
 // [from, to）
 inline bool IndexCache::add_entry(const Key &from, const Key &to,
                                   InternalPage *ptr) {
-
   // TODO memory leak
   auto buf = skiplist->AllocateKey(sizeof(CacheEntry));
   auto &e = *(CacheEntry *)buf;
   e.from = from;
-  e.to = to - 1; // !IMPORTANT;
+  e.to = to - 1;  // !IMPORTANT;
   e.ptr = ptr;
 
   return skiplist->InsertConcurrently(buf);
@@ -194,7 +192,7 @@ inline bool IndexCache::add_to_cache(InternalPage *page) {
     }
 
     return true;
-  } else { // conflicted
+  } else {  // conflicted
     auto e = this->find_entry(page->hdr.lowest, page->hdr.highest);
     if (e && e->from == page->hdr.lowest && e->to == page->hdr.highest - 1) {
       auto ptr = e->ptr;
@@ -218,7 +216,7 @@ inline const CacheEntry *IndexCache::search_from_cache(const Key &k,
                                                        bool is_leader) {
   // notice: please ensure the thread 0 can make progress
   if (is_leader &&
-      !delay_free_list.empty()) { // try to free a page in the delay-free-list
+      !delay_free_list.empty()) {  // try to free a page in the delay-free-list
     auto p = delay_free_list.front();
     if (asm_rdtsc() - p.second > 3000ull * 10) {
       free(p.first);
@@ -235,14 +233,12 @@ inline const CacheEntry *IndexCache::search_from_cache(const Key &k,
   InternalPage *page = entry ? entry->ptr : nullptr;
 
   if (page && entry->from <= k && entry->to >= k) {
-
     page->index_cache_freq++;
 
     auto cnt = page->hdr.last_index + 1;
     if (k < page->records[0].key) {
       *addr = page->hdr.leftmost_ptr;
     } else {
-
       bool find = false;
       for (int i = 1; i < cnt; ++i) {
         if (k < page->records[i].key) {
@@ -257,7 +253,7 @@ inline const CacheEntry *IndexCache::search_from_cache(const Key &k,
     }
 
     compiler_barrier();
-    if (entry->ptr) { // check if it is freed.
+    if (entry->ptr) {  // check if it is freed.
       return entry;
     }
   }
@@ -270,7 +266,7 @@ inline const CacheEntry *IndexCache::search_from_cache(const Key &k,
                                                        bool is_leader) {
   // notice: please ensure the thread 0 can make progress
   if (is_leader &&
-      !delay_free_list.empty()) { // try to free a page in the delay-free-list
+      !delay_free_list.empty()) {  // try to free a page in the delay-free-list
     auto p = delay_free_list.front();
     if (asm_rdtsc() - p.second > 3000ull * 10) {
       free(p.first);
@@ -287,14 +283,12 @@ inline const CacheEntry *IndexCache::search_from_cache(const Key &k,
   InternalPage *page = entry ? entry->ptr : nullptr;
 
   if (page && entry->from <= k && entry->to >= k) {
-
     page->index_cache_freq++;
 
     auto cnt = page->hdr.last_index + 1;
     if (k < page->records[0].key) {
       entry_idx = -1;
     } else {
-
       bool find = false;
       for (int i = 1; i < cnt; ++i) {
         if (k < page->records[i].key) {
@@ -309,7 +303,7 @@ inline const CacheEntry *IndexCache::search_from_cache(const Key &k,
     }
 
     compiler_barrier();
-    if (entry->ptr) { // check if it is freed.
+    if (entry->ptr) {  // check if it is freed.
       return entry;
     }
   }
@@ -317,9 +311,8 @@ inline const CacheEntry *IndexCache::search_from_cache(const Key &k,
   return nullptr;
 }
 
-inline void
-IndexCache::search_range_from_cache(const Key &from, const Key &to,
-                                    std::vector<InternalPage *> &result) {
+inline void IndexCache::search_range_from_cache(
+    const Key &from, const Key &to, std::vector<InternalPage *> &result) {
   CacheSkipList::Iterator iter(skiplist);
 
   result.clear();
@@ -348,7 +341,6 @@ inline bool IndexCache::invalidate(const CacheEntry *entry) {
   }
 
   if (__sync_bool_compare_and_swap(&(entry->ptr), ptr, 0)) {
-
     free_lock.wLock();
     delay_free_list.push(std::make_pair(ptr, asm_rdtsc()));
     free_lock.wUnlock();
@@ -380,7 +372,6 @@ retry:
 }
 
 inline void IndexCache::evict_one() {
-
   uint64_t freq1, freq2;
   auto e1 = get_a_random_entry(freq1);
   auto e2 = get_a_random_entry(freq2);
@@ -398,7 +389,6 @@ inline void IndexCache::statistics() {
 }
 
 inline void IndexCache::bench() {
-
   Timer t;
   t.begin();
   const int loop = 100000;
@@ -411,4 +401,4 @@ inline void IndexCache::bench() {
   t.end_print(loop);
 }
 
-#endif // _INDEX_CACHE_H_
+#endif  // _INDEX_CACHE_H_

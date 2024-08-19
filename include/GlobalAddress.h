@@ -3,21 +3,17 @@
 
 #include "Common.h"
 
-
 class GlobalAddress {
-public:
-
-union {
-  struct {
-  uint64_t nodeID: 16;
-  uint64_t offset : 48;
+ public:
+  union {
+    struct {
+      uint64_t nodeID : 16;
+      uint64_t offset : 48;
+    };
+    uint64_t val;
   };
-  uint64_t val;
-};
 
-  operator uint64_t() {
-    return val;
-  }
+  operator uint64_t() { return val; }
 
   static GlobalAddress Null() {
     static GlobalAddress zero{0, 0};

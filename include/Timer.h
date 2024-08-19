@@ -1,12 +1,13 @@
 #if !defined(_TIMER_H_)
 #define _TIMER_H_
 
-#include <cstdint>
-#include <cstdio>
 #include <time.h>
 
+#include <cstdint>
+#include <cstdio>
+
 class Timer {
-public:
+ public:
   Timer() = default;
 
   void begin() { clock_gettime(CLOCK_REALTIME, &s); }
@@ -22,7 +23,6 @@ public:
   }
 
   void print() {
-
     if (ns < 1000) {
       printf("%ldns per loop\n", ns);
     } else {
@@ -52,10 +52,10 @@ public:
     print();
   }
 
-private:
+ private:
   timespec s, e;
   uint64_t loop;
   uint64_t ns;
 };
 
-#endif // _TIMER_H_
+#endif  // _TIMER_H_

@@ -1,16 +1,14 @@
 #pragma once
 
+#include <boost/unordered/concurrent_flat_map.hpp>
+#include <boost/unordered/unordered_map.hpp>
 #include <iostream>
 
 #include "Common.h"
-#include "GlobalAddress.h"
-#include "KVCache.h"
-#include "IndexCache.h"
 #include "Directory.h"
-
-#include <boost/unordered/unordered_map.hpp>
-#include <boost/unordered/concurrent_flat_map.hpp>
-
+#include "GlobalAddress.h"
+#include "IndexCache.h"
+#include "KVCache.h"
 
 namespace forest {
 
@@ -22,7 +20,7 @@ struct BSearchResult {
 };
 
 class BHeader {
-private:
+ private:
   GlobalAddress leftmost_ptr;
   GlobalAddress parent_ptr;
   uint8_t level;
@@ -36,7 +34,7 @@ private:
   friend class BForest;
   friend class IndexCache;
 
-public:
+ public:
   BHeader() {
     leftmost_ptr = GlobalAddress::Null();
     parent_ptr = GlobalAddress::Null();
@@ -53,7 +51,8 @@ public:
   }
 
   void debug() const {
-    std::cout << "leftmost=" << leftmost_ptr << ", "
+    std::cout << "leftmost=" << leftmost_ptr
+              << ", "
               // << "sibling=" << sibling_ptr << ", "
               << "level=" << (int)level << ","
               << "cnt=" << last_index + 1 << ","
@@ -63,7 +62,7 @@ public:
 ;
 
 class BInternalEntry {
-public:
+ public:
   Key key;
   GlobalAddress ptr;
 
@@ -74,7 +73,7 @@ public:
 } __attribute__((packed));
 
 class BLeafEntry {
-public:
+ public:
   Key key;
   Value value;
 
@@ -84,14 +83,14 @@ public:
   }
 } __attribute__((packed));
 
-constexpr int kBInternalCardinality = (kInternalPageSize - sizeof(BHeader)) / sizeof(BInternalEntry);
+constexpr int kBInternalCardinality =
+    (kInternalPageSize - sizeof(BHeader)) / sizeof(BInternalEntry);
 
 constexpr int kBLeafCardinality =
-    (kLeafPageSize - sizeof(BHeader)) /
-    sizeof(BLeafEntry);
+    (kLeafPageSize - sizeof(BHeader)) / sizeof(BLeafEntry);
 
 class BInternalPage {
-private:
+ private:
   uint32_t crc;
   uint8_t front_version;
   BHeader hdr;
@@ -101,10 +100,10 @@ private:
   friend class BForest;
   friend class IndexCache;
 
-public:
+ public:
   // this is called when tree grows
   BInternalPage(GlobalAddress left, const Key &key, GlobalAddress right,
-               uint32_t level = 0) {
+                uint32_t level = 0) {
     hdr.leftmost_ptr = left;
     hdr.level = level;
     records[0].key = key;
@@ -125,7 +124,6 @@ public:
   }
 
   bool check_consistent() const {
-
     bool succ = true;
     auto cal_crc =
         CityHash32((char *)&front_version, (&rear_version) - (&front_version));
@@ -149,7 +147,7 @@ public:
 } __attribute__((packed));
 
 class BLeafPage {
-private:
+ private:
   uint32_t crc;
   uint8_t front_version;
   BHeader hdr;
@@ -157,7 +155,8 @@ private:
   uint8_t rear_version;
 
   friend class BForest;
-public:
+
+ public:
   BLeafPage(uint32_t level = 0) {
     hdr.level = level;
     records[0].value = kValueNull;
@@ -169,7 +168,6 @@ public:
   }
 
   bool check_consistent() const {
-
     bool succ = true;
     auto cal_crc =
         CityHash32((char *)&front_version, (&rear_version) - (&front_version));
@@ -197,14 +195,15 @@ struct BInsertedEntry {
 };
 
 class BForest {
-
-public:
+ public:
   BForest(DSM *dsm, int CNs, uint16_t tree_id);
 
-  bool search(const Key &k, Value &v, CoroContext *cxt = nullptr, int coro_id = 0);
+  bool search(const Key &k, Value &v, CoroContext *cxt = nullptr,
+              int coro_id = 0);
 
   void batch_insert(KVTS *kvs, int full_number, int thread_num);
-private:
+
+ private:
   DSM *dsm;
   int tree_num;
   uint16_t tree_id;
@@ -215,46 +214,56 @@ private:
   GlobalAddress allocator_starts[MAX_MEMORY];
 
   thread_local static uintptr_t stack_page_buffer[define::kMaxLevelOfTree];
-  thread_local static GlobalAddress stack_page_addr_buffer[define::kMaxLevelOfTree];
-  
+  thread_local static GlobalAddress
+      stack_page_addr_buffer[define::kMaxLevelOfTree];
+
   // boost::unordered_map<uint64_t, std::atomic<int>> tree_meta;
-  boost::concurrent_flat_map<uint64_t, int> tree_meta; 
+  boost::concurrent_flat_map<uint64_t, int> tree_meta;
   // new level
   GlobalAddress next_level_page_addr;
-  BInternalPage * next_level_page;
+  BInternalPage *next_level_page;
 
-  boost::concurrent_flat_map<uint64_t, std::vector<BInternalEntry>> new_inserted_entries[define::kMaxLevelOfTree];
+  boost::concurrent_flat_map<uint64_t, std::vector<BInternalEntry>>
+      new_inserted_entries[define::kMaxLevelOfTree];
   std::unordered_map<uint64_t, BHeader> new_inserted_headers;
   std::thread batch_insert_threads[kMaxBatchInsertCoreNum];
 
-private:
-  static void batch_insert_leaf(BForest *forest , KVTS *kvs, int start, int cnt, int full_number, int thread_id, CoroContext *cxt = nullptr,
-                    int coro_id = 0);
+ private:
+  static void batch_insert_leaf(BForest *forest, KVTS *kvs, int start, int cnt,
+                                int full_number, int thread_id,
+                                CoroContext *cxt = nullptr, int coro_id = 0);
   void batch_insert_internal(int thread_num);
 
-  GlobalAddress get_root_ptr_ptr(uint16_t id); 
+  GlobalAddress get_root_ptr_ptr(uint16_t id);
   GlobalAddress get_root_ptr(CoroContext *cxt, int coro_id, uint16_t id);
 
   void set_stack_buffer(int level, const Key &k, CoroContext *cxt, int coro_id);
-  void search_stack_buffer(int level, const Key &k, GlobalAddress & result);
+  void search_stack_buffer(int level, const Key &k, GlobalAddress &result);
 
-  void split_leaf(KVTS *kvs, int start, int split_num, int range, BatchInsertFlag l_flag, BatchInsertFlag r_flag, int thread_id, CoroContext *cxt= nullptr, int coro_id = 0);
-  inline void go_in_leaf(BLeafPage *lp, int start, Key lowest, Key highest, int &next);
+  void split_leaf(KVTS *kvs, int start, int split_num, int range,
+                  BatchInsertFlag l_flag, BatchInsertFlag r_flag, int thread_id,
+                  CoroContext *cxt = nullptr, int coro_id = 0);
+  inline void go_in_leaf(BLeafPage *lp, int start, Key lowest, Key highest,
+                         int &next);
   inline void go_in_kvts(KVTS *kvs, int start, int range, int &next);
   void calculate_meta(int split_num, BatchInsertFlag l_flag);
 
-  inline void set_leaf(KVTS *kvs, const Key &k, const Value &v, bool & need_split,BatchInsertFlag l_flag, BatchInsertFlag r_flag, int pre_kv, int pro_kv, CoroContext *cxt = nullptr, int coro_id = 0);
+  inline void set_leaf(KVTS *kvs, const Key &k, const Value &v,
+                       bool &need_split, BatchInsertFlag l_flag,
+                       BatchInsertFlag r_flag, int pre_kv, int pro_kv,
+                       CoroContext *cxt = nullptr, int coro_id = 0);
 
   void update_root(int level);
 
-  bool page_search(GlobalAddress page_addr, const Key &k, BSearchResult &result, 
+  bool page_search(GlobalAddress page_addr, const Key &k, BSearchResult &result,
                    CoroContext *cxt, int coro_id);
 
-  void internal_page_search(BInternalPage *page, const Key &k, BSearchResult &result);
+  void internal_page_search(BInternalPage *page, const Key &k,
+                            BSearchResult &result);
 
   void leaf_page_search(BLeafPage *page, const Key &k, BSearchResult &result);
 
   bool check_ga(GlobalAddress ga);
 };
-}; 
+};  // namespace forest
 // namespace forest

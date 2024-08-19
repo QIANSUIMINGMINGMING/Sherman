@@ -8,31 +8,31 @@
 // found in the LICENSE file. See the AUTHORS file for names of contributors.
 
 #pragma once
-#include <algorithm>
-#include <random>
 #include <stdint.h>
 #include <string.h>
+
+#include <algorithm>
+#include <random>
 #include <thread>
 #include <utility>
-
 
 // A very simple random number generator.  Not especially good at
 // generating truly random bits, but good enough for our needs in this
 // package.
 class Random {
-private:
+ private:
   enum : uint32_t {
-    M = 2147483647L // 2^31-1
+    M = 2147483647L  // 2^31-1
   };
   enum : uint64_t {
-    A = 16807 // bits 14, 8, 7, 5, 2, 1, 0
+    A = 16807  // bits 14, 8, 7, 5, 2, 1, 0
   };
 
   uint32_t seed_;
 
   static uint32_t GoodSeed(uint32_t s) { return (s & M) != 0 ? (s & M) : 1; }
 
-public:
+ public:
   // This is the largest value that can be returned from Next()
   enum : uint32_t { kMaxNext = M };
 
@@ -104,10 +104,10 @@ public:
 // This exists in part to avoid compiler variance in warning about coercing
 // uint_fast32_t from mt19937 to uint32_t.
 class Random32 {
-private:
+ private:
   std::mt19937 generator_;
 
-public:
+ public:
   explicit Random32(uint32_t s) : generator_(s) {}
 
   // Generates the next random number
@@ -117,8 +117,8 @@ public:
   // REQUIRES: n > 0
   uint32_t Uniform(uint32_t n) {
     return static_cast<uint32_t>(
-        std::uniform_int_distribution<std::mt19937::result_type>(0, n - 1)(
-            generator_));
+        std::uniform_int_distribution<std::mt19937::result_type>(
+            0, n - 1)(generator_));
   }
 
   // Returns an *almost* uniformly distributed value in the range [0..n-1].
@@ -146,10 +146,10 @@ public:
 
 // A good 64-bit random number generator based on std::mt19937_64
 class Random64 {
-private:
+ private:
   std::mt19937_64 generator_;
 
-public:
+ public:
   explicit Random64(uint64_t s) : generator_(s) {}
 
   // Generates the next random number
@@ -181,6 +181,7 @@ void RandomShuffle(RandomIt first, RandomIt last, uint32_t seed) {
 }
 
 // A replacement for removed std::random_shuffle
-template <class RandomIt> void RandomShuffle(RandomIt first, RandomIt last) {
+template <class RandomIt>
+void RandomShuffle(RandomIt first, RandomIt last) {
   RandomShuffle(first, last, std::random_device{}());
 }

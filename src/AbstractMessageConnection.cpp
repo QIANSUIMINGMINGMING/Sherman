@@ -3,13 +3,16 @@
 AbstractMessageConnection::AbstractMessageConnection(
     ibv_qp_type type, uint16_t sendPadding, uint16_t recvPadding,
     RdmaContext &ctx, ibv_cq *cq, uint32_t messageNR)
-    : messageNR(messageNR), curMessage(0), curSend(0), sendCounter(0),
-      sendPadding(sendPadding), recvPadding(recvPadding) {
-
+    : messageNR(messageNR),
+      curMessage(0),
+      curSend(0),
+      sendCounter(0),
+      sendPadding(sendPadding),
+      recvPadding(recvPadding) {
   assert(messageNR % kBatchCount == 0);
 
   send_cq = ibv_create_cq(ctx.ctx, 128, NULL, NULL, 0);
-  //TODO: adapt to new API 
+  // TODO: adapt to new API
   createQueuePair(&message, type, send_cq, cq, &ctx);
   modifyUDtoRTS(message, &ctx);
 
@@ -21,7 +24,7 @@ AbstractMessageConnection::AbstractMessageConnection(
 }
 
 void AbstractMessageConnection::initRecv() {
-  subNR = messageNR / kBatchCount; //96 / 4 = 24
+  subNR = messageNR / kBatchCount;  // 96 / 4 = 24
 
   for (int i = 0; i < kBatchCount; ++i) {
     recvs[i] = new ibv_recv_wr[subNR];

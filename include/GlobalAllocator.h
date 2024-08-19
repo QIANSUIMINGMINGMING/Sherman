@@ -1,26 +1,23 @@
 #if !defined(_GLOBAL_ALLOCATOR_H_)
 #define _GLOBAL_ALLOCATOR_H_
 
+#include <cstring>
+
 #include "Common.h"
 #include "Debug.h"
 #include "GlobalAddress.h"
 
-#include <cstring>
-
-
-
-// global allocator for coarse-grained (chunck level) alloc 
+// global allocator for coarse-grained (chunck level) alloc
 // used by home agent
 // bitmap based
 class GlobalAllocator {
-
-public:
+ public:
   GlobalAllocator(const GlobalAddress &start, size_t size)
       : start(start), size(size) {
     bitmap_len = size / define::kChunkSize;
     bitmap = new bool[bitmap_len];
     memset(bitmap, 0, bitmap_len);
-     
+
     // null ptr
     bitmap[0] = true;
     bitmap_tail = 1;
@@ -29,7 +26,6 @@ public:
   ~GlobalAllocator() { delete[] bitmap; }
 
   GlobalAddress alloc_chunck() {
-
     GlobalAddress res = start;
     if (bitmap_tail >= bitmap_len) {
       assert(false);
@@ -53,7 +49,7 @@ public:
     bitmap[(addr.offset - start.offset) / define::kChunkSize] = false;
   }
 
-private:
+ private:
   GlobalAddress start;
   size_t size;
 

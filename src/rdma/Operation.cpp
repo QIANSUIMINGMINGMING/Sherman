@@ -4,7 +4,6 @@ int pollWithCQ(ibv_cq *cq, int pollNumber, struct ibv_wc *wc) {
   int count = 0;
 
   do {
-
     int new_count = ibv_poll_cq(cq, 1, wc);
     count += new_count;
 
@@ -72,7 +71,6 @@ static inline void fillSgeWr(ibv_sge &sg, ibv_recv_wr &wr, uint64_t source,
 bool rdmaSend(ibv_qp *qp, uint64_t source, uint64_t size, uint32_t lkey,
               ibv_ah *ah, uint32_t remoteQPN /* remote dct_number */,
               bool isSignaled) {
-
   struct ibv_sge sg;
   struct ibv_send_wr wr;
   struct ibv_send_wr *wrBad;
@@ -85,8 +83,7 @@ bool rdmaSend(ibv_qp *qp, uint64_t source, uint64_t size, uint32_t lkey,
   wr.wr.ud.remote_qpn = remoteQPN;
   wr.wr.ud.remote_qkey = UD_PKEY;
 
-  if (isSignaled)
-    wr.send_flags = IBV_SEND_SIGNALED;
+  if (isSignaled) wr.send_flags = IBV_SEND_SIGNALED;
   if (ibv_post_send(qp, &wr, &wrBad)) {
     Debug::notifyError("Send with RDMA_SEND failed.");
     return false;
@@ -97,7 +94,6 @@ bool rdmaSend(ibv_qp *qp, uint64_t source, uint64_t size, uint32_t lkey,
 // for RC & UC
 bool rdmaSend(ibv_qp *qp, uint64_t source, uint64_t size, uint32_t lkey,
               int32_t imm) {
-
   struct ibv_sge sg;
   struct ibv_send_wr wr;
   struct ibv_send_wr *wrBad;
@@ -137,7 +133,6 @@ bool rdmaReceive(ibv_qp *qp, uint64_t source, uint64_t size, uint32_t lkey,
 }
 
 bool rdmaReceive(ibv_srq *srq, uint64_t source, uint64_t size, uint32_t lkey) {
-
   struct ibv_sge sg;
   struct ibv_recv_wr wr;
   struct ibv_recv_wr *wrBad;
@@ -177,12 +172,10 @@ bool rdmaRead(ibv_qp *qp, uint64_t source, uint64_t dest, uint64_t size,
   return true;
 }
 
-
 // for RC & UC
 bool rdmaWrite(ibv_qp *qp, uint64_t source, uint64_t dest, uint64_t size,
                uint32_t lkey, uint32_t remoteRKey, int32_t imm, bool isSignaled,
                uint64_t wrID) {
-
   struct ibv_sge sg;
   struct ibv_send_wr wr;
   struct ibv_send_wr *wrBad;
@@ -235,8 +228,9 @@ bool rdmaFetchAndAdd(ibv_qp *qp, uint64_t source, uint64_t dest, uint64_t add,
   return true;
 }
 
-//TODO: implement this function
-// static inline void fillSgeWr(ibv_sge &sg, ibv_exp_send_wr &wr, uint64_t source,
+// TODO: implement this function
+// static inline void fillSgeWr(ibv_sge &sg, ibv_exp_send_wr &wr, uint64_t
+// source,
 //                              uint64_t size, uint32_t lkey) {
 //   memset(&sg, 0, sizeof(sg));
 //   sg.addr = (uintptr_t)source;
@@ -260,68 +254,68 @@ bool rdmaFetchAndAddBoundary(ibv_qp *qp, uint64_t source, uint64_t dest,
 
   wr.wr_id = wr_id;
 
-//   enum ibv_wr_opcode {
-// 	IBV_WR_RDMA_WRITE,
-// 	IBV_WR_RDMA_WRITE_WITH_IMM,
-// 	IBV_WR_SEND,
-// 	IBV_WR_SEND_WITH_IMM,
-// 	IBV_WR_RDMA_READ,
-// 	IBV_WR_ATOMIC_CMP_AND_SWP,
-// 	IBV_WR_ATOMIC_FETCH_AND_ADD,
-// 	IBV_WR_LOCAL_INV,
-// 	IBV_WR_BIND_MW,
-// 	IBV_WR_SEND_WITH_INV,
-// 	IBV_WR_TSO,
-// 	IBV_WR_DRIVER1,
-// };
+  //   enum ibv_wr_opcode {
+  // 	IBV_WR_RDMA_WRITE,
+  // 	IBV_WR_RDMA_WRITE_WITH_IMM,
+  // 	IBV_WR_SEND,
+  // 	IBV_WR_SEND_WITH_IMM,
+  // 	IBV_WR_RDMA_READ,
+  // 	IBV_WR_ATOMIC_CMP_AND_SWP,
+  // 	IBV_WR_ATOMIC_FETCH_AND_ADD,
+  // 	IBV_WR_LOCAL_INV,
+  // 	IBV_WR_BIND_MW,
+  // 	IBV_WR_SEND_WITH_INV,
+  // 	IBV_WR_TSO,
+  // 	IBV_WR_DRIVER1,
+  // };
 
-// enum ibv_send_flags {
-// 	IBV_SEND_FENCE		= 1 << 0,
-// 	IBV_SEND_SIGNALED	= 1 << 1,
-// 	IBV_SEND_SOLICITED	= 1 << 2,
-// 	IBV_SEND_INLINE		= 1 << 3,
-// 	IBV_SEND_IP_CSUM	= 1 << 4
-// };
+  // enum ibv_send_flags {
+  // 	IBV_SEND_FENCE		= 1 << 0,
+  // 	IBV_SEND_SIGNALED	= 1 << 1,
+  // 	IBV_SEND_SOLICITED	= 1 << 2,
+  // 	IBV_SEND_INLINE		= 1 << 3,
+  // 	IBV_SEND_IP_CSUM	= 1 << 4
+  // };
 
-// enum ibv_exp_wr_opcode {
-// 	IBV_EXP_WR_RDMA_WRITE		= IBV_WR_RDMA_WRITE,
-// 	IBV_EXP_WR_RDMA_WRITE_WITH_IMM	= IBV_WR_RDMA_WRITE_WITH_IMM,
-// 	IBV_EXP_WR_SEND			= IBV_WR_SEND,
-// 	IBV_EXP_WR_SEND_WITH_IMM	= IBV_WR_SEND_WITH_IMM,
-// 	IBV_EXP_WR_RDMA_READ		= IBV_WR_RDMA_READ,
-// 	IBV_EXP_WR_ATOMIC_CMP_AND_SWP	= IBV_WR_ATOMIC_CMP_AND_SWP,
-// 	IBV_EXP_WR_ATOMIC_FETCH_AND_ADD	= IBV_WR_ATOMIC_FETCH_AND_ADD,
-// 	IBV_EXP_WR_LOCAL_INV		= IBV_WR_LOCAL_INV,
-// 	IBV_EXP_WR_BIND_MW		= IBV_WR_BIND_MW,
-// 	IBV_EXP_WR_SEND_WITH_INV	= IBV_WR_SEND_WITH_INV,
+  // enum ibv_exp_wr_opcode {
+  // 	IBV_EXP_WR_RDMA_WRITE		= IBV_WR_RDMA_WRITE,
+  // 	IBV_EXP_WR_RDMA_WRITE_WITH_IMM	= IBV_WR_RDMA_WRITE_WITH_IMM,
+  // 	IBV_EXP_WR_SEND			= IBV_WR_SEND,
+  // 	IBV_EXP_WR_SEND_WITH_IMM	= IBV_WR_SEND_WITH_IMM,
+  // 	IBV_EXP_WR_RDMA_READ		= IBV_WR_RDMA_READ,
+  // 	IBV_EXP_WR_ATOMIC_CMP_AND_SWP	= IBV_WR_ATOMIC_CMP_AND_SWP,
+  // 	IBV_EXP_WR_ATOMIC_FETCH_AND_ADD	= IBV_WR_ATOMIC_FETCH_AND_ADD,
+  // 	IBV_EXP_WR_LOCAL_INV		= IBV_WR_LOCAL_INV,
+  // 	IBV_EXP_WR_BIND_MW		= IBV_WR_BIND_MW,
+  // 	IBV_EXP_WR_SEND_WITH_INV	= IBV_WR_SEND_WITH_INV,
 
-// 	IBV_EXP_WR_TSO			= 15 + IBV_EXP_START_ENUM,
-// 	IBV_EXP_WR_SEND_ENABLE		= 0x20 + IBV_EXP_START_ENUM,
-// 	IBV_EXP_WR_RECV_ENABLE,
-// 	IBV_EXP_WR_CQE_WAIT,
-// 	IBV_EXP_WR_EXT_MASKED_ATOMIC_CMP_AND_SWP,
-// 	IBV_EXP_WR_EXT_MASKED_ATOMIC_FETCH_AND_ADD,
-// 	IBV_EXP_WR_NOP,
-// 	IBV_EXP_WR_UMR_FILL,
-// 	IBV_EXP_WR_UMR_INVALIDATE,
-// };
+  // 	IBV_EXP_WR_TSO			= 15 + IBV_EXP_START_ENUM,
+  // 	IBV_EXP_WR_SEND_ENABLE		= 0x20 + IBV_EXP_START_ENUM,
+  // 	IBV_EXP_WR_RECV_ENABLE,
+  // 	IBV_EXP_WR_CQE_WAIT,
+  // 	IBV_EXP_WR_EXT_MASKED_ATOMIC_CMP_AND_SWP,
+  // 	IBV_EXP_WR_EXT_MASKED_ATOMIC_FETCH_AND_ADD,
+  // 	IBV_EXP_WR_NOP,
+  // 	IBV_EXP_WR_UMR_FILL,
+  // 	IBV_EXP_WR_UMR_INVALIDATE,
+  // };
 
-// enum ibv_exp_send_flags {
-// 	IBV_EXP_SEND_FENCE		= IBV_SEND_FENCE,
-// 	IBV_EXP_SEND_SIGNALED		= IBV_SEND_SIGNALED,
-// 	IBV_EXP_SEND_SOLICITED		= IBV_SEND_SOLICITED,
-// 	IBV_EXP_SEND_INLINE		= IBV_SEND_INLINE,
+  // enum ibv_exp_send_flags {
+  // 	IBV_EXP_SEND_FENCE		= IBV_SEND_FENCE,
+  // 	IBV_EXP_SEND_SIGNALED		= IBV_SEND_SIGNALED,
+  // 	IBV_EXP_SEND_SOLICITED		= IBV_SEND_SOLICITED,
+  // 	IBV_EXP_SEND_INLINE		= IBV_SEND_INLINE,
 
-// 	IBV_EXP_SEND_IP_CSUM		= (IBV_EXP_START_FLAG << 0),
-// 	IBV_EXP_SEND_WITH_CALC		= (IBV_EXP_START_FLAG << 1),
-// 	IBV_EXP_SEND_WAIT_EN_LAST	= (IBV_EXP_START_FLAG << 2),
-// 	IBV_EXP_SEND_EXT_ATOMIC_INLINE	= (IBV_EXP_START_FLAG << 3),
-// };
-
+  // 	IBV_EXP_SEND_IP_CSUM		= (IBV_EXP_START_FLAG << 0),
+  // 	IBV_EXP_SEND_WITH_CALC		= (IBV_EXP_START_FLAG << 1),
+  // 	IBV_EXP_SEND_WAIT_EN_LAST	= (IBV_EXP_START_FLAG << 2),
+  // 	IBV_EXP_SEND_EXT_ATOMIC_INLINE	= (IBV_EXP_START_FLAG << 3),
+  // };
 }
 // bool rdmaFetchAndAddBoundary(ibv_qp *qp, uint64_t source, uint64_t dest,
-//                              uint64_t add, uint32_t lkey, uint32_t remoteRKey,
-//                              uint64_t boundary, bool singal, uint64_t wr_id) {
+//                              uint64_t add, uint32_t lkey, uint32_t
+//                              remoteRKey, uint64_t boundary, bool singal,
+//                              uint64_t wr_id) {
 //   struct ibv_sge sg;
 //   struct ibv_exp_send_wr wr;
 //   struct ibv_exp_send_wr *wrBad;
@@ -350,7 +344,6 @@ bool rdmaFetchAndAddBoundary(ibv_qp *qp, uint64_t source, uint64_t dest,
 //   }
 //   return true;
 // }
-
 
 // for RC & UC
 bool rdmaCompareAndSwap(ibv_qp *qp, uint64_t source, uint64_t dest,
@@ -382,7 +375,7 @@ bool rdmaCompareAndSwap(ibv_qp *qp, uint64_t source, uint64_t dest,
   return true;
 }
 
-//TODO: implement this function
+// TODO: implement this function
 bool rdmaCompareAndSwapMask(ibv_qp *qp, uint64_t source, uint64_t dest,
                             uint64_t compare, uint64_t swap, uint32_t lkey,
                             uint32_t remoteRKey, uint64_t mask, bool singal) {
@@ -417,10 +410,8 @@ bool rdmaCompareAndSwapMask(ibv_qp *qp, uint64_t source, uint64_t dest,
   return true;
 }
 
-
 bool rdmaWriteBatch(ibv_qp *qp, RdmaOpRegion *ror, int k, bool isSignaled,
                     uint64_t wrID) {
-
   struct ibv_sge sg[kOroMax];
   struct ibv_send_wr wr[kOroMax];
   struct ibv_send_wr *wrBad;
@@ -452,7 +443,6 @@ bool rdmaWriteBatch(ibv_qp *qp, RdmaOpRegion *ror, int k, bool isSignaled,
 bool rdmaCasRead(ibv_qp *qp, const RdmaOpRegion &cas_ror,
                  const RdmaOpRegion &read_ror, uint64_t compare, uint64_t swap,
                  bool isSignaled, uint64_t wrID) {
-
   struct ibv_sge sg[2];
   struct ibv_send_wr wr[2];
   struct ibv_send_wr *wrBad;
@@ -486,7 +476,6 @@ bool rdmaCasRead(ibv_qp *qp, const RdmaOpRegion &cas_ror,
 bool rdmaWriteFaa(ibv_qp *qp, const RdmaOpRegion &write_ror,
                   const RdmaOpRegion &faa_ror, uint64_t add_val,
                   bool isSignaled, uint64_t wrID) {
-
   struct ibv_sge sg[2];
   struct ibv_send_wr wr[2];
   struct ibv_send_wr *wrBad;
@@ -519,7 +508,6 @@ bool rdmaWriteFaa(ibv_qp *qp, const RdmaOpRegion &write_ror,
 bool rdmaWriteCas(ibv_qp *qp, const RdmaOpRegion &write_ror,
                   const RdmaOpRegion &cas_ror, uint64_t compare, uint64_t swap,
                   bool isSignaled, uint64_t wrID) {
-
   struct ibv_sge sg[2];
   struct ibv_send_wr wr[2];
   struct ibv_send_wr *wrBad;

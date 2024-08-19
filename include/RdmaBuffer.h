@@ -5,15 +5,15 @@
 
 // abstract rdma registered buffer
 class RdmaBuffer {
-
-private:
+ private:
   static const int kLevelStackPageBufferCnt = 8;
-  static const int kStackPageBufferCnt = kLevelStackPageBufferCnt * define::kMaxLevelOfTree;
+  static const int kStackPageBufferCnt =
+      kLevelStackPageBufferCnt * define::kMaxLevelOfTree;
   static const int kSplitPageBufferCnt = 8 * define::kMaxLeafSplit;
 
-  static const int kPageBufferCnt = 8;    // async, buffer safty
-  static const int kSiblingBufferCnt = 8; // async, buffer safty
-  static const int kCasBufferCnt = 8;     // async, buffer safty
+  static const int kPageBufferCnt = 8;     // async, buffer safty
+  static const int kSiblingBufferCnt = 8;  // async, buffer safty
+  static const int kCasBufferCnt = 8;      // async, buffer safty
   static const int kNextLevelBufferCnt = 8;
   // static const int kBatchPageBufferCnt = 99;
   // static const int k
@@ -39,7 +39,7 @@ private:
 
   int kPageSize;
 
-public:
+ public:
   RdmaBuffer(char *buffer) {
     set_buffer(buffer);
 
@@ -54,7 +54,6 @@ public:
   RdmaBuffer() = default;
 
   void set_buffer(char *buffer) {
-
     // printf("set buffer %p\n", buffer);
 
     kPageSize = std::max(kLeafPageSize, kInternalPageSize);
@@ -63,20 +62,24 @@ public:
     unlock_buffer =
         (uint64_t *)((char *)cas_buffer + sizeof(uint64_t) * kCasBufferCnt);
     zero_64bit = (uint64_t *)((char *)unlock_buffer + sizeof(uint64_t));
-    stack_page_buffer = (char*) zero_64bit + sizeof(uint64_t);
-    split_page_buffer = (char*) stack_page_buffer + kPageSize * kStackPageBufferCnt;
+    stack_page_buffer = (char *)zero_64bit + sizeof(uint64_t);
+    split_page_buffer =
+        (char *)stack_page_buffer + kPageSize * kStackPageBufferCnt;
     // page_buffer = (char *)zero_64bit + sizeof(uint64_t);
-    page_buffer = (char *) split_page_buffer + kPageSize * kSplitPageBufferCnt;
+    page_buffer = (char *)split_page_buffer + kPageSize * kSplitPageBufferCnt;
     sibling_buffer = (char *)page_buffer + kPageSize * kPageBufferCnt;
-    next_level_page_buffer = (char *)sibling_buffer + kPageSize * kSiblingBufferCnt; 
-    entry_buffer = (char *)next_level_page_buffer + kPageSize * kNextLevelBufferCnt;
+    next_level_page_buffer =
+        (char *)sibling_buffer + kPageSize * kSiblingBufferCnt;
+    entry_buffer =
+        (char *)next_level_page_buffer + kPageSize * kNextLevelBufferCnt;
     *zero_64bit = 0;
 
     // assert((char *)zero_64bit + 8 - buffer < define::kPerCoroRdmaBuf);
-    assert(entry_buffer - buffer < define::kPerCoroRdmaBuf );
+    assert(entry_buffer - buffer < define::kPerCoroRdmaBuf);
   }
-  char * get_next_level_buffer() {
-    next_level_page_buffer_cur = (next_level_page_buffer_cur + 1) % kNextLevelBufferCnt;
+  char *get_next_level_buffer() {
+    next_level_page_buffer_cur =
+        (next_level_page_buffer_cur + 1) % kNextLevelBufferCnt;
     return next_level_page_buffer + next_level_page_buffer_cur * kPageSize;
   }
 
@@ -90,8 +93,11 @@ public:
   uint64_t *get_zero_64bit() const { return zero_64bit; }
 
   char *get_stack_page_buffer(int level) {
-    stack_page_buffer_cur[level] = (stack_page_buffer_cur[level] + 1) % (kStackPageBufferCnt / define::kMaxLevelOfTree);
-    auto level_stack_page_buffer = stack_page_buffer + level * kPageSize * kLevelStackPageBufferCnt;
+    stack_page_buffer_cur[level] =
+        (stack_page_buffer_cur[level] + 1) %
+        (kStackPageBufferCnt / define::kMaxLevelOfTree);
+    auto level_stack_page_buffer =
+        stack_page_buffer + level * kPageSize * kLevelStackPageBufferCnt;
     return level_stack_page_buffer + stack_page_buffer_cur[level] * kPageSize;
   }
 
@@ -106,9 +112,7 @@ public:
     return page_buffer + (page_buffer_cur * kPageSize);
   }
 
-  char *get_range_buffer() {
-    return page_buffer;
-  }
+  char *get_range_buffer() { return page_buffer; }
 
   char *get_sibling_buffer() {
     sibling_buffer_cur = (sibling_buffer_cur + 1) % kSiblingBufferCnt;
@@ -118,4 +122,4 @@ public:
   char *get_entry_buffer() const { return entry_buffer; }
 };
 
-#endif // _RDMA_BUFFER_H_
+#endif  // _RDMA_BUFFER_H_

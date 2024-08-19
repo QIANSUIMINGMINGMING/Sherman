@@ -2,7 +2,6 @@
 
 bool createContext(RdmaContext *context, uint8_t port, int gidIndex,
                    uint8_t devIndex) {
-
   ibv_device *dev = NULL;
   ibv_context *ctx = NULL;
   ibv_pd *pd = NULL;
@@ -79,7 +78,7 @@ bool createContext(RdmaContext *context, uint8_t port, int gidIndex,
 
   // check device memory support
   if (kMaxDeviceMemorySize == 0) {
-    //TODO: adapt to new API
+    // TODO: adapt to new API
     checkDMSupported(ctx);
   }
 
@@ -124,7 +123,6 @@ bool destoryContext(RdmaContext *context) {
 }
 
 ibv_mr *createMemoryRegion(uint64_t mm, uint64_t mmSize, RdmaContext *ctx) {
-
   ibv_mr *mr = NULL;
   mr = ibv_reg_mr(ctx->pd, (void *)mm, mmSize,
                   IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ |
@@ -137,9 +135,8 @@ ibv_mr *createMemoryRegion(uint64_t mm, uint64_t mmSize, RdmaContext *ctx) {
   return mr;
 }
 
-//TODO: implement this function
-ibv_mr *createMemoryRegionOnChip(uint64_t mm, size_t mmSize,
-                                 RdmaContext *ctx) {
+// TODO: implement this function
+ibv_mr *createMemoryRegionOnChip(uint64_t mm, size_t mmSize, RdmaContext *ctx) {
   /* Device memory allocation request */
   struct ibv_alloc_dm_attr dm_attr;
   memset(&dm_attr, 0, sizeof(dm_attr));
@@ -151,12 +148,10 @@ ibv_mr *createMemoryRegionOnChip(uint64_t mm, size_t mmSize,
   }
 
   /* Device memory registration as memory region */
-  struct ibv_mr *mr = ibv_reg_dm_mr(ctx->pd, dm, mm, mmSize,
-                                    IBV_ACCESS_ZERO_BASED |
-                                    IBV_ACCESS_LOCAL_WRITE |
-                                        IBV_ACCESS_REMOTE_READ |
-                                        IBV_ACCESS_REMOTE_WRITE |
-                                        IBV_ACCESS_REMOTE_ATOMIC);
+  struct ibv_mr *mr = ibv_reg_dm_mr(
+      ctx->pd, dm, mm, mmSize,
+      IBV_ACCESS_ZERO_BASED | IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ |
+          IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_ATOMIC);
   if (!mr) {
     Debug::notifyError("Memory registration failed");
     return nullptr;
@@ -214,11 +209,10 @@ ibv_mr *createMemoryRegionOnChip(uint64_t mm, size_t mmSize,
   // return mr;
 }
 
-//TODO: implement this function
+// TODO: implement this function
 bool createQueuePair(ibv_qp **qp, ibv_qp_type mode, ibv_cq *send_cq,
                      ibv_cq *recv_cq, RdmaContext *context,
                      uint32_t qpsMaxDepth, uint32_t maxInlineData) {
-
   struct ibv_qp_init_attr_ex attr;
   memset(&attr, 0, sizeof(attr));
 
@@ -229,9 +223,8 @@ bool createQueuePair(ibv_qp **qp, ibv_qp_type mode, ibv_cq *send_cq,
   attr.pd = context->pd;
 
   if (mode == IBV_QPT_RC) {
-    //FIXME: solve masked atomic operations
-    attr.comp_mask = IBV_QP_INIT_ATTR_CREATE_FLAGS | 
-                     IBV_QP_INIT_ATTR_PD;
+    // FIXME: solve masked atomic operations
+    attr.comp_mask = IBV_QP_INIT_ATTR_CREATE_FLAGS | IBV_QP_INIT_ATTR_PD;
   } else {
     attr.comp_mask = IBV_QP_INIT_ATTR_PD;
   }
@@ -248,7 +241,7 @@ bool createQueuePair(ibv_qp **qp, ibv_qp_type mode, ibv_cq *send_cq,
     return false;
   }
 
-  Debug::notifyInfo("Create Queue Pair with Num = %d", (*qp)->qp_num); 
+  Debug::notifyInfo("Create Queue Pair with Num = %d", (*qp)->qp_num);
 
   // struct ibv_exp_qp_init_attr attr;
   // memset(&attr, 0, sizeof(attr));
@@ -261,7 +254,8 @@ bool createQueuePair(ibv_qp **qp, ibv_qp_type mode, ibv_cq *send_cq,
 
   // if (mode == IBV_QPT_RC) {
   //   attr.comp_mask = IBV_EXP_QP_INIT_ATTR_CREATE_FLAGS |
-  //                    IBV_EXP_QP_INIT_ATTR_PD | IBV_EXP_QP_INIT_ATTR_ATOMICS_ARG;
+  //                    IBV_EXP_QP_INIT_ATTR_PD |
+  //                    IBV_EXP_QP_INIT_ATTR_ATOMICS_ARG;
   //   attr.max_atomic_arg = 32;
   // } else {
   //   attr.comp_mask = IBV_EXP_QP_INIT_ATTR_PD;
@@ -329,7 +323,6 @@ bool createQueuePair(ibv_qp **qp, ibv_qp_type mode, ibv_cq *cq,
 
 void fillAhAttr(ibv_ah_attr *attr, uint32_t remoteLid, uint8_t *remoteGid,
                 RdmaContext *context) {
-
   (void)remoteGid;
 
   memset(attr, 0, sizeof(ibv_ah_attr));

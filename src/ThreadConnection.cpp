@@ -22,7 +22,7 @@ ThreadConnection::ThreadConnection(uint16_t threadID, void *cachePool,
   for (int i = 0; i < NR_DIRECTORY; ++i) {
     data[i] = new ibv_qp *[machineNR];
     for (size_t k = 0; k < machineNR; ++k) {
-      //TODO: adapt to new API
+      // TODO: adapt to new API
       createQueuePair(&data[i][k], IBV_QPT_RC, cq, &ctx);
     }
   }
@@ -30,7 +30,6 @@ ThreadConnection::ThreadConnection(uint16_t threadID, void *cachePool,
 
 void ThreadConnection::sendMessage2Dir(RawMessage *m, uint16_t node_id,
                                        uint16_t dir_id) {
-  
   message->sendRawMessage(m, remoteInfo[node_id].dirMessageQPN[dir_id],
                           remoteInfo[node_id].appToDirAh[threadID][dir_id]);
 }

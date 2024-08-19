@@ -6,7 +6,6 @@ DirectoryConnection::DirectoryConnection(uint16_t dirID, void *dsmPool,
                                          uint64_t dsmSize, uint32_t machineNR,
                                          RemoteConnection *remoteInfo)
     : dirID(dirID), remoteInfo(remoteInfo) {
-
   createContext(&ctx);
   cq = ibv_create_cq(ctx.ctx, RAW_RECV_CQ_COUNT, NULL, NULL, 0);
   message = new RawMessageConnection(ctx, cq, DIR_MESSAGE_NR);

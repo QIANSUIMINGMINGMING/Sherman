@@ -14,11 +14,8 @@
 class DSMKeeper;
 class Directory;
 
-
-
 class DSM {
-
-public:
+ public:
   // obtain netowrk resources for a thread
   void registerThread();
 
@@ -129,14 +126,12 @@ public:
 
   // Memcached operations for sync
   size_t Put(uint64_t key, const void *value, size_t count) {
-
     std::string k = std::string("gam-") + std::to_string(key);
     keeper->memSet(k.c_str(), k.size(), (char *)value, count);
     return count;
   }
 
   size_t Get(uint64_t key, void *value) {
-
     std::string k = std::string("gam-") + std::to_string(key);
     size_t size;
     char *ret = keeper->memGet(k.c_str(), k.size(), &size);
@@ -145,7 +140,7 @@ public:
     return size;
   }
 
-private:
+ private:
   DSM(const DSMConfig &conf);
   ~DSM();
 
@@ -173,10 +168,12 @@ private:
 
   Directory *dirAgent[NR_DIRECTORY];
 
-public:
+ public:
   bool is_register() { return thread_id != -1; }
   void barrier(const std::string &ss) { keeper->barrier(ss); }
-  void barrier(const std::string &ss, BarrierType bt) { keeper->barrier(ss, bt); }
+  void barrier(const std::string &ss, BarrierType bt) {
+    keeper->barrier(ss, bt);
+  }
   char *get_rdma_buffer() { return rdma_buffer; }
   RdmaBuffer &get_rbuf(int coro_id) { return rbuf[coro_id]; }
 
@@ -185,7 +182,6 @@ public:
 
   void rpc_call_dir(const RawMessage &m, uint16_t node_id,
                     uint16_t dir_id = 0) {
-
     auto buffer = (RawMessage *)iCon->message->getSendPool();
 
     memcpy(buffer, &m, sizeof(RawMessage));
@@ -209,12 +205,12 @@ inline void DSM::post_send() {
   thread_local int next_target_dir_id =
       (getMyThreadID() + getMyNodeID()) % NR_DIRECTORY;
 
-  this->rpc_call_dir({RpcType::POST_SEND}, next_target_node, next_target_dir_id);
+  this->rpc_call_dir({RpcType::POST_SEND}, next_target_node,
+                     next_target_dir_id);
 }
 
-//TODO: modify execute mode
+// TODO: modify execute mode
 inline GlobalAddress DSM::alloc(size_t size) {
-
   thread_local int next_target_node =
       (getMyThreadID() + getMyNodeID()) % conf.memoryNR;
   thread_local int next_target_dir_id =

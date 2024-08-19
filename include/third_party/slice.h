@@ -21,6 +21,7 @@
 #include <assert.h>
 #include <stddef.h>
 #include <string.h>
+
 #include <cstdio>
 #include <string>
 
@@ -29,7 +30,6 @@
 #endif
 
 // #include "rocksdb/cleanable.h"
-
 
 class Slice {
  public:
